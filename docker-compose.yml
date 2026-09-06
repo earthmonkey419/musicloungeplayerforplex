@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  mlplayer:
+    build: .
+    container_name: mlplayer
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8680}:8680"
+    environment:
+      - PLEX_URL=http://10.0.0.251:32400
+      - PLEX_TOKEN=REPLACE_ME
+      - MUSIC_LIB=Music
+      - ADMIN_PASSWORD=REPLACE_ME
+      - SECRET_KEY=REPLACE_ME_RANDOM
+      - COOKIE_SECURE=true
+      - DB_PATH=/app/data/mlplayer.db
+      - SMTP_HOST=REPLACE_ME
+      - SMTP_PORT=587
+      - SMTP_USERNAME=REPLACE_ME
+      - SMTP_PASSWORD=REPLACE_ME
+      - SMTP_FROM_ADDRESS=REPLACE_ME
+      - SMTP_FROM_DISPLAY_NAME=MusicLounge Player
+      # Optional -- leave unset to disable, no degraded functionality
+      - MUSICMIND_DB_PATH=
+    volumes:
+      - mlplayer-data:/app/data
+      # - ./config.py:/app/config.py:ro
+
+volumes:
+  mlplayer-data:

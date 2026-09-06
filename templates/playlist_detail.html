@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}{{ playlist['name'] }} — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+<a href="{{ url_for('playlists.index') }}" class="link-manage">← All Playlists</a>
+<div class="pl-section-header">
+  <h1 style="font-size:28px; line-height:36px; margin:0;">{{ playlist['name'] }}
+    {% if playlist['source'] == 'plex_synced' %}<span class="tag">Plex-synced (read-only)</span>{% endif %}
+  </h1>
+  {% if tracks %}
+  <button id="play-all-btn" class="pl-btn pl-btn-primary">▶ Play All</button>
+  {% endif %}
+</div>
+
+<ul id="track-list" class="track-list">
+  {% for t in tracks %}
+  <li class="track-row" data-row-id="{{ t['id'] }}" data-ref="{{ t['track_ref'] }}" data-title="{{ t['title'] }}" data-artist="{{ t['artist'] }}" {% if playlist['source'] == 'native' %}draggable="true"{% endif %}>
+    {% if playlist['source'] == 'native' %}
+    <span class="track-drag-handle" title="Drag to reorder">⋮⋮</span>
+    {% endif %}
+    <img class="track-art" src="/art/{{ t['track_ref'] }}" alt="">
+    <div class="track-meta">
+      <div class="track-title">{{ t['title'] }}</div>
+      <div class="track-artist">{{ t['artist'] }}</div>
+    </div>
+    <button class="track-play" title="Play">▶</button>
+    {% if playlist['source'] == 'native' %}
+    <button class="track-remove" data-row-id="{{ t['id'] }}" title="Remove">✕</button>
+    {% endif %}
+  </li>
+  {% else %}
+  <li class="empty">No tracks yet.</li>
+  {% endfor %}
+</ul>
+
+{% if playlist['source'] == 'native' %}
+<div class="playlist-actions">
+  <button id="export-btn" class="btn-secondary">Export to Plex</button>
+  {% if playlist['exported_ref'] %}
+  <span class="export-status">Last exported to Plex as "MusicLounge-{{ playlist['name'] }}"</span>
+  {% endif %}
+</div>
+{% endif %}
+
+{% include "partials/_now_playing_bar.html" %}
+
+<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+<script>
+const PLAYLIST_SOURCE = {{ playlist['source']|tojson }};
+
+function currentTracks() {
+  return Array.from(document.querySelectorAll("#track-list .track-row")).map(row => ({
+    rating_key: row.dataset.ref,
+    title: row.dataset.title,
+    artist: row.dataset.artist,
+  }));
+}
+
+document.querySelectorAll(".track-play").forEach((btn, i) => {
+  btn.addEventListener("click", () => {
+    MLPlayer.playQueue(currentTracks(), i);
+  });
+});
+
+const playAllBtn = document.getElementById("play-all-btn");
+if (playAllBtn) {
+  playAllBtn.addEventListener("click", () => {
+    MLPlayer.playQueue(currentTracks(), 0);
+  });
+}
+
+document.querySelectorAll(".track-remove").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const rowId = btn.dataset.rowId;
+    fetch("{{ url_for('playlists.api_remove_track', playlist_id=playlist['id']) }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({track_row_id: rowId}),
+    })
+      .then(r => r.json())
+      .then(data => { if (data.ok) window.location.reload(); });
+  });
+});
+
+if (PLAYLIST_SOURCE === "native") {
+  const trackList = document.getElementById("track-list");
+  let draggedEl = null;
+
+  document.querySelectorAll(".track-row").forEach(row => {
+    row.addEventListener("dragstart", () => {
+      draggedEl = row;
+      row.classList.add("dragging");
+    });
+
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      draggedEl = null;
+      saveNewOrder();
+    });
+
+    row.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!draggedEl || draggedEl === row) return;
+      const rect = row.getBoundingClientRect();
+      const putAfter = (e.clientY - rect.top) > (rect.height / 2);
+      row.parentNode.insertBefore(draggedEl, putAfter ? row.nextSibling : row);
+    });
+  });
+
+  function saveNewOrder() {
+    const refs = Array.from(trackList.querySelectorAll(".track-row")).map(r => r.dataset.ref);
+    fetch("{{ url_for('playlists.api_reorder', playlist_id=playlist['id']) }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({track_refs: refs}),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) alert(data.error || "Couldn't save the new order.");
+        window.location.reload();
+      })
+      .catch(() => {
+        alert("Something went wrong saving the new order -- reloading to check current state.");
+        window.location.reload();
+      });
+  }
+}
+
+{% if playlist['source'] == 'native' %}
+document.getElementById("export-btn").addEventListener("click", () => {
+  fetch("{{ url_for('playlists.api_export', playlist_id=playlist['id']) }}", {method: "POST"})
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        let msg = `Exported ${data.track_count} tracks to Plex as "${data.exported_name}".`;
+        if (data.missing_tracks && data.missing_tracks.length) {
+          msg += `\n\nCouldn't find in Plex: ${data.missing_tracks.join(", ")}`;
+        }
+        alert(msg);
+        window.location.reload();
+      } else {
+        alert(data.error || "Export failed.");
+      }
+    });
+});
+{% endif %}
+</script>
+{% endblock %}

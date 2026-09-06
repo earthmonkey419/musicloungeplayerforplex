@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Settings — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; margin:var(--pl-space-lg) 0 var(--pl-space-md);">
+  <h1 style="font-size:32px;">📊 Settings</h1>
+  <a href="{{ url_for('admin.dashboard') }}" class="link-manage" style="margin:0;">← Dashboard</a>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+    <div class="room-card-label" style="margin:0;">SHARE LINKS ({{ shares|length }})</div>
+    <div style="display:flex; gap:8px;">
+      <a href="{{ url_for('admin.stats_download', kind='shares') }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">⬇ Download CSV</a>
+      <form method="post" action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Clear expired and revoked share links? Live links are never affected.');" style="display:inline;">
+        <input type="hidden" name="kind" value="shares">
+        <button type="submit" class="btn-secondary" style="padding:6px 12px; font-size:12px;">🗑 Clear expired/revoked</button>
+      </form>
+    </div>
+  </div>
+  {% if shares %}
+  <div style="max-height:480px; overflow-y:auto; overflow-x:auto;">
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      <thead>
+        <tr style="text-align:left;">
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Content</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Type</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Status</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Plays</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Created</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Expires</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Last Played</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Sent To</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in shares %}
+        <tr style="border-bottom:1px solid var(--pl-border);">
+          <td style="padding:8px 6px;">{{ s.content_title or "--" }}{% if s.content_artist %}<br><span style="color:var(--pl-text-secondary); font-size:12px;">{{ s.content_artist }}</span>{% endif %}</td>
+          <td style="padding:8px 6px;">{{ s.content_type }}</td>
+          <td style="padding:8px 6px;">
+            {% if s.status == "live" %}<span class="pl-badge pl-badge-live">LIVE</span>
+            {% elif s.status == "expired" %}<span class="pl-badge pl-badge-neutral">EXPIRED</span>
+            {% else %}<span class="pl-badge pl-badge-revoked">REVOKED</span>{% endif %}
+          </td>
+          <td style="padding:8px 6px; font-weight:700;">{{ s.access_count }}</td>
+          <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.created_at[:16] if s.created_at else "--" }}</td>
+          <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.expires_at[:16] if s.expires_at else "--" }}</td>
+          <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.last_accessed_at[:16] if s.last_accessed_at else "never" }}</td>
+          <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.recipient_email or (s.delivery_method or "not sent yet") }}</td>
+          <td style="padding:8px 6px;">
+            {% if s.status == "live" %}
+            <form method="post" action="{{ url_for('admin.stats_revoke_share') }}" onsubmit="return confirm('End this link? It will stop working immediately.');" style="display:inline;">
+              <input type="hidden" name="token" value="{{ s.share_token }}">
+              <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Link</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--pl-text-secondary);">No share links created yet.</p>
+  {% endif %}
+</div>
+
+<div class="pl-card pl-card-surface">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+    <div class="room-card-label" style="margin:0;">ROOM SESSIONS ({{ rooms|length }})</div>
+    <div style="display:flex; gap:8px;">
+      <a href="{{ url_for('admin.stats_download', kind='rooms') }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">⬇ Download CSV</a>
+      <form method="post" action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Clear ended room sessions? The current active room, if any, is never affected.');" style="display:inline;">
+        <input type="hidden" name="kind" value="rooms">
+        <button type="submit" class="btn-secondary" style="padding:6px 12px; font-size:12px;">🗑 Clear ended</button>
+      </form>
+    </div>
+  </div>
+  {% if rooms %}
+  <div style="max-height:480px; overflow-y:auto; overflow-x:auto;">
+    <table style="width:100%; border-collapse:collapse; font-size:14px;">
+      <thead>
+        <tr style="text-align:left;">
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Room Name</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Started</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Devices Joined</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Status</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rooms %}
+        <tr style="border-bottom:1px solid var(--pl-border);">
+          <td style="padding:8px 6px;">{{ r.room_name }}</td>
+          <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ r.started_at[:16] if r.started_at else "--" }}</td>
+          <td style="padding:8px 6px; font-weight:700;">{{ r.device_count }}</td>
+          <td style="padding:8px 6px;">
+            {% if r.ended_by_admin %}<span class="pl-badge pl-badge-neutral">ENDED</span>
+            {% else %}<span class="pl-badge pl-badge-live">ACTIVE</span>{% endif %}
+          </td>
+          <td style="padding:8px 6px;">
+            {% if not r.ended_by_admin %}
+            <form method="post" action="{{ url_for('admin.stats_end_room') }}" onsubmit="return confirm('End this room for everyone?');" style="display:inline;">
+              <input type="hidden" name="session_id" value="{{ r.session_id }}">
+              <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Room</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--pl-text-secondary);">No rooms started yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

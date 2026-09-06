@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Room Mode — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+
+{% if room %}
+<div style="display:flex; justify-content:center; align-items:center; gap:16px; margin:var(--pl-space-lg) 0 28px;">
+  <h1>{{ room["room_name"] }}</h1>
+  <form method="post" onsubmit="return confirm('End this room for everyone?');">
+    <input type="hidden" name="action" value="end">
+    <button type="submit" class="pl-btn pl-btn-dark" style="padding:8px 16px; font-size:13px;">End Room</button>
+  </form>
+</div>
+{% endif %}
+
+{% if not room %}
+<div class="pl-card pl-card-surface" style="max-width:420px; margin:40px auto; text-align:center;">
+  <h2 style="margin-bottom:14px;">No room running right now</h2>
+  <form method="post" style="display:flex; flex-direction:column; gap:12px;">
+    <input type="hidden" name="action" value="start">
+    <input type="text" name="room_name" placeholder="Room name, e.g. Louis's Lounge" class="pl-text-input">
+    <button type="submit" class="pl-btn pl-btn-primary">Start a Room</button>
+  </form>
+</div>
+
+{% else %}
+<audio id="player" preload="auto"></audio>
+
+<div id="tap-to-play-banner" class="room-tap-banner" onclick="unlockAudio()">
+  ▶ Tap here to start playback — your browser blocked autoplay
+</div>
+
+<div class="room-grid">
+  <div>
+    <div class="pl-card pl-card-surface">
+      <div class="room-card-label">NOW PLAYING</div>
+      <div class="room-now-playing">
+        <img id="np-art" class="room-art" src="{{ '/art/' + room['now_playing_ref']|string if room['now_playing_ref'] else '' }}" onerror="this.style.opacity=0" style="{{ '' if room['now_playing_ref'] else 'opacity:0;' }}">
+        <div>
+          <h2 id="np-title" style="font-size:22px; margin:0;">{{ room["now_playing_title"] or "Nothing queued yet" }}</h2>
+          <p id="np-artist" class="pl-small" style="margin:4px 0 12px;">{{ room["now_playing_artist"] or "Add a song from the guest portal to get started" }}</p>
+          <div class="room-transport">
+            <button class="room-transport-btn" onclick="postAction('/api/skip')" title="Skip">⏭</button>
+            <button id="playpause-btn" class="room-transport-play" onclick="togglePlayPause()">{{ "⏸" if room["is_playing"] else "▶" }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pl-card pl-card-surface" style="margin-top:var(--pl-space-md);">
+      <div class="room-card-label">UP NEXT</div>
+      <ul id="queue-list" class="track-list">
+        {% for item in queue %}
+        <li class="track-row">
+          <span class="room-queue-pos">{{ "%02d"|format(loop.index) }}</span>
+          <img class="track-art" src="/art/{{ item['track_ref'] }}" onerror="this.style.opacity=0">
+          <div class="track-meta">
+            <div class="track-title">{{ item["title"] }}</div>
+            <div class="track-artist">{{ item["artist"] }}</div>
+          </div>
+        </li>
+        {% else %}
+        <li class="empty">Queue's empty — send guests to the join link below.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="pl-card pl-card-surface">
+    <div class="room-card-label">INVITE PEOPLE</div>
+    <p style="font-size:13px; color: var(--pl-text-secondary);">Scan to join instantly, or share the code.</p>
+    <div style="text-align:center; margin:16px 0;">
+      <img src="{{ qr_data_uri }}" alt="Scan to join" class="room-qr">
+    </div>
+    <div style="text-align:center; margin-bottom:16px;">
+      <span class="room-join-code">{{ room["join_code"] }}</span>
+    </div>
+    <button class="pl-btn pl-btn-dark pl-btn-block" onclick="copyJoinLink()">🔗 Copy Join Link</button>
+  </div>
+</div>
+
+<script>
+const ROOM_ID = {{ room["session_id"]|tojson }};
+const JOIN_URL = {{ join_url|tojson }};
+const INITIAL_VOLUME = {{ room["volume"]|tojson }};
+
+const audioEl = document.getElementById("player");
+let currentTrackRef = {{ room["now_playing_ref"]|tojson }};
+audioEl.volume = INITIAL_VOLUME / 100;
+
+if (currentTrackRef) {
+  audioEl.src = "/stream/" + currentTrackRef;
+}
+
+function attemptPlay() {
+  const p = audioEl.play();
+  if (p !== undefined) {
+    p.catch(() => {
+      document.getElementById("tap-to-play-banner").classList.add("room-tap-banner-visible");
+    });
+  }
+}
+
+function unlockAudio() {
+  document.getElementById("tap-to-play-banner").classList.remove("room-tap-banner-visible");
+  attemptPlay();
+}
+
+function togglePlayPause() {
+  if (audioEl.paused) attemptPlay(); else audioEl.pause();
+  postAction("/api/playpause");
+}
+
+audioEl.addEventListener("ended", () => {
+  postAction("/api/skip");
+});
+
+function postAction(path) {
+  fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"})
+    .then(r => r.json())
+    .then(refreshState)
+    .catch(console.error);
+}
+
+function copyJoinLink() {
+  navigator.clipboard.writeText(JOIN_URL).then(() => alert("Join link copied: " + JOIN_URL));
+}
+
+function syncAudio(state) {
+  if (!state.now_playing) {
+    audioEl.pause();
+    audioEl.removeAttribute("src");
+    currentTrackRef = null;
+    return;
+  }
+  if (state.now_playing.ref !== currentTrackRef) {
+    currentTrackRef = state.now_playing.ref;
+    audioEl.src = "/stream/" + currentTrackRef;
+    audioEl.load();
+    if (state.now_playing.is_playing) attemptPlay();
+  } else {
+    if (state.now_playing.is_playing && audioEl.paused) attemptPlay();
+    if (!state.now_playing.is_playing && !audioEl.paused) audioEl.pause();
+  }
+  audioEl.volume = state.now_playing.volume / 100;
+}
+
+function refreshState() {
+  fetch("/api/room-state")
+    .then(r => r.json())
+    .then(state => {
+      if (state.error) return;
+      document.getElementById("np-title").textContent = state.now_playing ? state.now_playing.title : "Nothing queued yet";
+      document.getElementById("np-artist").textContent = state.now_playing ? state.now_playing.artist : "Add a song from the guest portal to get started";
+      document.getElementById("playpause-btn").textContent = state.now_playing && state.now_playing.is_playing ? "⏸" : "▶";
+      const npArt = document.getElementById("np-art");
+      if (state.now_playing) {
+        npArt.style.opacity = 1;
+        npArt.src = "/art/" + state.now_playing.ref;
+      } else {
+        npArt.style.opacity = 0;
+      }
+      const list = document.getElementById("queue-list");
+      if (state.queue.length === 0) {
+        list.innerHTML = '<li class="empty">Queue\\'s empty — send guests to the join link below.</li>';
+      } else {
+        list.innerHTML = state.queue.map((item, i) => `
+          <li class="track-row">
+            <span class="room-queue-pos">${String(i+1).padStart(2,"0")}</span>
+            <img class="track-art" src="/art/${item.track_ref}" onerror="this.style.opacity=0">
+            <div class="track-meta">
+              <div class="track-title">${item.title}</div>
+              <div class="track-artist">${item.artist}</div>
+            </div>
+          </li>`).join("");
+      }
+      syncAudio(state);
+    })
+    .catch(console.error);
+}
+
+if (currentTrackRef && {{ (room["is_playing"] == 1)|tojson }}) {
+  attemptPlay();
+}
+
+setInterval(refreshState, 4000);
+</script>
+{% endif %}
+{% endblock %}

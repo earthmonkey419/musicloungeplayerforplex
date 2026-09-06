@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{{ content_title }} -- MusicLounge{% endblock %}
+{% block og_tags %}
+<meta property="og:title" content="{{ content_title }}{% if content_artist %} -- {{ content_artist }}{% endif %}">
+<meta property="og:description" content="Someone shared this with you on MusicLounge. Tap to listen -- no account needed.">
+<meta property="og:image" content="{{ url_for('room.art', rating_key=share['content_ref'], _external=True) }}">
+<meta property="og:type" content="music.song">
+<meta name="twitter:card" content="summary_large_image">
+{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center;">
+  {% include "partials/_wordmark.html" %}
+  <span class="countdown" id="countdown">expires soon</span>
+</div>
+
+<audio id="player" preload="auto"></audio>
+
+<div class="linked-player">
+  <img id="hero-art" class="art-lg" src="/art/{{ share['content_ref'] }}" onerror="this.style.opacity=0">
+  <h2 style="font-size:24px;">{{ content_title }}</h2>
+  {% if content_artist %}<p style="color:var(--ink-soft); margin:4px 0 20px;">{{ content_artist }}</p>{% endif %}
+
+  <div class="card surface-hi" style="text-align:left; margin-bottom:20px;">
+    <div style="font-size:12px; font-weight:700; letter-spacing:0.06em; color:var(--orange-deep); margin-bottom:6px;">NOW PLAYING</div>
+    <div id="now-playing-title" style="font-weight:700;">Nothing playing yet</div>
+    <div id="now-playing-artist" style="color:var(--ink-soft); font-size:14px;"></div>
+  </div>
+
+  <div class="track-list">
+    {% for t in tracks %}
+    <div class="track-row" style="cursor:pointer;" onclick="playTrack({{ loop.index0 }})" id="track-row-{{ loop.index0 }}">
+      <span>{{ loop.index }}. {{ t["title"] }}</span>
+      <span>{{ "%d:%02d"|format(t["duration_sec"] // 60, t["duration_sec"] % 60) }}</span>
+    </div>
+    {% else %}
+    <p style="color:var(--ink-soft);">Nothing to play -- this content may no longer be available.</p>
+    {% endfor %}
+  </div>
+
+  <div class="transport" style="justify-content:center; margin-top:20px;">
+    <button id="shuffle-btn" class="btn btn-round" onclick="toggleShuffle()" title="Shuffle">🔀</button>
+    <button class="btn btn-round" onclick="prevTrack()">⏮</button>
+    <button id="playpause-btn" class="btn btn-round btn-primary" onclick="togglePlayPause()">▶</button>
+    <button class="btn btn-round" onclick="nextTrack()">⏭</button>
+  </div>
+</div>
+
+<button id="back-to-top" class="btn btn-round btn-primary" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Back to top" style="position:fixed; bottom:24px; right:24px; z-index:10; display:none;">⬆</button>
+
+<script>
+const TRACKS = {{ tracks|tojson }};
+const EXPIRES_AT = {{ share["expires_at"]|tojson }};
+const audioEl = document.getElementById("player");
+let currentIndex = -1;
+
+let shuffleOn = false;
+let shuffleQueue = [];
+let playHistory = [];
+
+function highlightRow(i) {
+  document.querySelectorAll(".track-row").forEach(el => el.style.fontWeight = "normal");
+  const row = document.getElementById("track-row-" + i);
+  if (row) row.style.fontWeight = "700";
+}
+
+function rebuildShuffleQueue() {
+  shuffleQueue = TRACKS.map((_, i) => i).filter(i => i !== currentIndex);
+  for (let i = shuffleQueue.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
+  }
+}
+
+function toggleShuffle() {
+  shuffleOn = !shuffleOn;
+  document.getElementById("shuffle-btn").classList.toggle("btn-primary", shuffleOn);
+  if (shuffleOn) {
+    playHistory = [];
+    rebuildShuffleQueue();
+  }
+}
+
+function playTrack(i, fromShuffleAdvance) {
+  if (i < 0 || i >= TRACKS.length) return;
+
+  if (shuffleOn && !fromShuffleAdvance) {
+    if (currentIndex !== -1) playHistory.push(currentIndex);
+    const idx = shuffleQueue.indexOf(i);
+    if (idx !== -1) shuffleQueue.splice(idx, 1);
+  }
+
+  currentIndex = i;
+  audioEl.src = "/stream/" + TRACKS[i].rating_key;
+  audioEl.load();
+  audioEl.play().catch(() => {});
+  document.getElementById("hero-art").src = "/art/" + TRACKS[i].rating_key;
+  document.getElementById("now-playing-title").textContent = TRACKS[i].title;
+  document.getElementById("now-playing-artist").textContent = TRACKS[i].artist || "";
+  highlightRow(i);
+  document.getElementById("playpause-btn").textContent = "⏸";
+}
+
+function togglePlayPause() {
+  if (currentIndex === -1) { playTrack(0); return; }
+  if (audioEl.paused) {
+    audioEl.play();
+    document.getElementById("playpause-btn").textContent = "⏸";
+  } else {
+    audioEl.pause();
+    document.getElementById("playpause-btn").textContent = "▶";
+  }
+}
+
+function nextTrack() {
+  if (shuffleOn) {
+    if (currentIndex !== -1) playHistory.push(currentIndex);
+    if (shuffleQueue.length === 0) {
+      rebuildShuffleQueue();
+      if (shuffleQueue.length === 0) return;
+    }
+    const next = shuffleQueue.shift();
+    playTrack(next, true);
+  } else {
+    if (currentIndex + 1 < TRACKS.length) playTrack(currentIndex + 1);
+  }
+}
+
+function prevTrack() {
+  if (shuffleOn) {
+    if (playHistory.length > 0) {
+      const prev = playHistory.pop();
+      playTrack(prev, true);
+    }
+  } else {
+    if (currentIndex > 0) playTrack(currentIndex - 1);
+  }
+}
+
+audioEl.addEventListener("ended", nextTrack);
+
+function updateCountdown() {
+  const expires = new Date(EXPIRES_AT + "Z").getTime();
+  const now = Date.now();
+  const diff = expires - now;
+  const el = document.getElementById("countdown");
+  if (diff <= 0) {
+    el.textContent = "expired";
+    return;
+  }
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  el.textContent = `expires in ${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+updateCountdown();
+setInterval(updateCountdown, 1000);
+
+window.addEventListener("scroll", () => {
+  document.getElementById("back-to-top").style.display = window.scrollY > 300 ? "flex" : "none";
+});
+</script>
+{% endblock %}

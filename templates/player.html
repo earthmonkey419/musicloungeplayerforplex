@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% block title %}MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+
+<section class="pl-hero">
+  <img src="{{ url_for('static', filename='hero-logo.jpg') }}" alt="MusicLounge Player" class="pl-hero-logo">
+  <p class="pl-hero-tagline">The full listening lounge — search, browse, and build playlists, just for you.</p>
+</section>
+
+<section class="pl-search-band">
+  <div class="pl-search-row">
+    <div class="pl-search-input-wrap">
+      <span class="pl-search-icon">⌕</span>
+      <input id="search-input" type="text" placeholder="Search your library…" autocomplete="off">
+    </div>
+    <button id="search-btn" class="pl-btn pl-btn-primary">Search</button>
+  </div>
+  <div id="mood-pills" class="pl-chip-row">
+    <span class="pl-chip-label">Popular genres</span>
+    <button class="mood-pill" data-mood="funk">Funk</button>
+    <button class="mood-pill" data-mood="soul">Soul</button>
+    <button class="mood-pill" data-mood="jazz">Jazz</button>
+    <button class="mood-pill" data-mood="dance">Dance</button>
+    <button class="mood-pill" data-mood="chill">Chill</button>
+    <button class="mood-pill" data-mood="rock">Rock</button>
+    {% if musicmind_available %}
+    <label class="mood-instrumental-toggle">
+      <input type="checkbox" id="instrumental-only"> Instrumental only
+    </label>
+    {% endif %}
+  </div>
+</section>
+
+<section id="results-section" class="pl-results-section" hidden>
+  <div class="pl-section-header">
+    <h2>Results</h2>
+    <button id="clear-search-btn" class="pl-link-btn">✕ Clear</button>
+  </div>
+  <div id="results-scroll" class="pl-results-scroll">
+    <ul id="results-list" class="track-list"></ul>
+  </div>
+  <button id="back-to-top-btn" class="pl-back-to-top" hidden title="Back to top">↑ Top</button>
+</section>
+
+<section id="default-view">
+  <div class="pl-action-row">
+    <div class="pl-card pl-card-gold">
+      <div class="pl-card-icon">👥</div>
+      <h3>Start a Room</h3>
+      <p>Bring others in — shared queue, one now-playing, everyone joins by code.</p>
+      <a href="{{ url_for('admin.dashboard') }}" class="pl-btn pl-btn-dark">Start a Room →</a>
+    </div>
+
+    <div class="pl-card pl-card-mint">
+      <div class="pl-card-icon">🎁</div>
+      <h3>Share Some Music</h3>
+      <p>Send an album, artist, or playlist as a private link.</p>
+      <a href="{{ url_for('share.new_share') }}" class="pl-btn pl-btn-dark">Create a Link →</a>
+    </div>
+
+    <div class="pl-card pl-card-neutral pl-card-playlists">
+      <div class="pl-section-header pl-section-header-tight">
+        <h3>Your Playlists</h3>
+        <a href="{{ url_for('playlists.index') }}" class="pl-link-btn">View all →</a>
+      </div>
+      <ul class="pl-playlist-mini-list">
+        {% for p in playlists[:5] %}
+        <li>
+          <a href="{{ url_for('playlists.view', playlist_id=p['id']) }}">
+            {{ p['name'] }}
+            {% if p['source'] == 'plex_synced' %}<span class="tag">Plex</span>{% endif %}
+          </a>
+        </li>
+        {% else %}
+        <li class="empty">No playlists yet.</li>
+        {% endfor %}
+      </ul>
+      <button id="new-playlist-btn" class="pl-btn pl-btn-mint pl-btn-block">+ New Playlist</button>
+    </div>
+  </div>
+
+  <section class="pl-recently-played">
+    <div class="pl-section-header">
+      <h2>Recently Played</h2>
+    </div>
+    <p class="pl-empty-note">
+      Not tracked yet — Player doesn't keep listening history in this version.
+      This section is reserved for that once it's built.
+    </p>
+  </section>
+</section>
+
+{% include "partials/_now_playing_bar.html" %}
+
+<div id="add-to-playlist-modal" class="pl-modal-overlay" hidden>
+  <div class="pl-modal">
+    <div class="pl-modal-header">
+      <h3>Add to playlist</h3>
+      <button id="atp-close" class="pl-link-btn" title="Close">✕</button>
+    </div>
+    <p id="atp-track-label" class="pl-small" style="margin: 0 0 var(--pl-space-sm);"></p>
+
+    <ul id="atp-playlist-list" class="pl-modal-playlist-list"></ul>
+
+    <div class="pl-modal-new-row">
+      <input id="atp-new-name" type="text" placeholder="Or create a new playlist…">
+      <button id="atp-new-btn" class="pl-btn pl-btn-mint">Create &amp; Add</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const nativePlaylists = {{ playlists | selectattr('source', 'equalto', 'native') | list | tojson }};
+</script>
+
+<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+<script>
+const resultsSection = document.getElementById("results-section");
+const defaultView = document.getElementById("default-view");
+const resultsScroll = document.getElementById("results-scroll");
+const resultsList = document.getElementById("results-list");
+const backToTopBtn = document.getElementById("back-to-top-btn");
+
+const atpModal = document.getElementById("add-to-playlist-modal");
+const atpTrackLabel = document.getElementById("atp-track-label");
+const atpPlaylistList = document.getElementById("atp-playlist-list");
+const atpNewName = document.getElementById("atp-new-name");
+let atpCurrentTrack = null;
+
+const RESULTS_PAGE_SIZE = 20;
+
+let currentQueryType = null;
+let currentQueryValue = null;
+let currentMoodInstrumentalOnly = false;
+let currentOffset = 0;
+let isLoadingResults = false;
+let hasMoreResults = false;
+let resultsObserver = null;
+let allLoadedTracks = [];
+
+function trackRow(t, indexInAllLoaded) {
+  const li = document.createElement("li");
+  li.className = "track-row";
+  li.innerHTML = `
+    <img class="track-art" src="/art/${t.rating_key}" alt="">
+    <div class="track-meta">
+      <div class="track-title">${t.title}</div>
+      <div class="track-artist">${t.artist}</div>
+    </div>
+    <button class="track-play" title="Play">▶</button>
+    <button class="track-add" title="Add to playlist">+</button>
+  `;
+  li.querySelector(".track-play").addEventListener("click", () => {
+    MLPlayer.playQueue(allLoadedTracks, indexInAllLoaded);
+  });
+  li.querySelector(".track-add").addEventListener("click", () => openAddToPlaylist(t));
+  return li;
+}
+
+function appendResultsPage(tracks, isFirstPage) {
+  if (isFirstPage) {
+    resultsList.innerHTML = "";
+    allLoadedTracks = [];
+  }
+  if (isFirstPage && tracks.length === 0) {
+    resultsList.innerHTML = '<li class="empty">No matches found.</li>';
+    return;
+  }
+  tracks.forEach(t => {
+    allLoadedTracks.push(t);
+    resultsList.appendChild(trackRow(t, allLoadedTracks.length - 1));
+  });
+}
+
+function showLoadingMore() {
+  removeLoadingMore();
+  const li = document.createElement("li");
+  li.id = "results-loading-more";
+  li.className = "empty";
+  li.textContent = "Loading more…";
+  resultsList.appendChild(li);
+}
+
+function removeLoadingMore() {
+  const existing = document.getElementById("results-loading-more");
+  if (existing) existing.remove();
+}
+
+function removeSentinel() {
+  const existing = document.getElementById("results-sentinel");
+  if (existing) existing.remove();
+  if (resultsObserver) {
+    resultsObserver.disconnect();
+    resultsObserver = null;
+  }
+}
+
+function ensureSentinel() {
+  removeSentinel();
+  if (!hasMoreResults) return;
+  const sentinel = document.createElement("li");
+  sentinel.id = "results-sentinel";
+  sentinel.style.height = "1px";
+  resultsList.appendChild(sentinel);
+  resultsObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && hasMoreResults && !isLoadingResults) {
+      loadResultsPage(false);
+    }
+  }, { root: resultsScroll, rootMargin: "200px" });
+  resultsObserver.observe(sentinel);
+}
+
+function maybeShowEndHint(tracks) {
+  if (hasMoreResults || tracks.length === 0) return;
+  if (resultsList.querySelector(".results-end-hint")) return;
+  const li = document.createElement("li");
+  li.className = "empty results-end-hint";
+  li.textContent = "— That's everything —";
+  resultsList.appendChild(li);
+}
+
+async function loadResultsPage(isFirstPage) {
+  if (isLoadingResults) return;
+  if (!isFirstPage && !hasMoreResults) return;
+  isLoadingResults = true;
+
+  resultsSection.hidden = false;
+  defaultView.hidden = true;
+
+  if (isFirstPage) {
+    currentOffset = 0;
+    removeSentinel();
+    resultsList.innerHTML = '<li class="empty">Searching…</li>';
+    resultsScroll.scrollTop = 0;
+    backToTopBtn.hidden = true;
+  } else {
+    showLoadingMore();
+  }
+
+  const params = new URLSearchParams({
+    offset: String(currentOffset),
+    limit: String(RESULTS_PAGE_SIZE),
+  });
+  let url;
+  if (currentQueryType === "search") {
+    params.set("q", currentQueryValue);
+    url = `/api/player/search?${params.toString()}`;
+  } else {
+    if (currentMoodInstrumentalOnly) params.set("instrumental_only", "1");
+    url = `/api/player/mood/${currentQueryValue}?${params.toString()}`;
+  }
+
+  let data;
+  try {
+    const res = await fetch(url);
+    data = await res.json();
+    if (data.error) throw new Error(data.error);
+  } catch (e) {
+    data = { results: [], has_more: false, next_offset: currentOffset };
+  }
+
+  if (!isFirstPage) removeLoadingMore();
+  appendResultsPage(data.results, isFirstPage);
+  hasMoreResults = !!data.has_more;
+  currentOffset = typeof data.next_offset === "number" ? data.next_offset : currentOffset + data.results.length;
+  isLoadingResults = false;
+
+  maybeShowEndHint(data.results);
+  ensureSentinel();
+}
+
+function clearResults() {
+  removeSentinel();
+  resultsSection.hidden = true;
+  defaultView.hidden = false;
+  document.getElementById("search-input").value = "";
+  currentQueryType = null;
+  currentQueryValue = null;
+}
+
+resultsScroll.addEventListener("scroll", () => {
+  backToTopBtn.hidden = resultsScroll.scrollTop < 300;
+});
+
+backToTopBtn.addEventListener("click", () => {
+  resultsScroll.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+function openAddToPlaylist(track) {
+  atpCurrentTrack = track;
+  atpTrackLabel.textContent = `"${track.title}" — ${track.artist}`;
+  atpNewName.value = "";
+  renderPlaylistPickerList();
+  atpModal.hidden = false;
+}
+
+function closeAddToPlaylist() {
+  atpModal.hidden = true;
+  atpCurrentTrack = null;
+}
+
+function renderPlaylistPickerList() {
+  atpPlaylistList.innerHTML = "";
+  if (!nativePlaylists.length) {
+    atpPlaylistList.innerHTML = '<li class="empty">No playlists yet -- create one below.</li>';
+    return;
+  }
+  nativePlaylists.forEach(p => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.className = "pl-modal-playlist-btn";
+    btn.textContent = p.name;
+    btn.addEventListener("click", () => addTrackToPlaylist(p.id, p.name));
+    li.appendChild(btn);
+    atpPlaylistList.appendChild(li);
+  });
+}
+
+function addTrackToPlaylist(playlistId, playlistName) {
+  fetch(`/playlists/api/${playlistId}/add-track`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({rating_key: atpCurrentTrack.rating_key}),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        closeAddToPlaylist();
+      } else {
+        alert(data.error || "Couldn't add that track.");
+      }
+    })
+    .catch(() => alert("Something went wrong adding that track."));
+}
+
+document.getElementById("atp-close").addEventListener("click", closeAddToPlaylist);
+atpModal.addEventListener("click", (e) => { if (e.target === atpModal) closeAddToPlaylist(); });
+
+document.getElementById("atp-new-btn").addEventListener("click", () => {
+  const name = atpNewName.value.trim();
+  if (!name) return;
+  fetch("{{ url_for('playlists.api_create') }}", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name}),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { alert(data.error || "Couldn't create playlist."); return; }
+      nativePlaylists.push({id: data.playlist_id, name: name, source: "native"});
+      addTrackToPlaylist(data.playlist_id, name);
+    });
+});
+
+function runSearch() {
+  const q = document.getElementById("search-input").value.trim();
+  if (!q) { clearResults(); return; }
+  currentQueryType = "search";
+  currentQueryValue = q;
+  loadResultsPage(true);
+}
+
+document.getElementById("search-btn").addEventListener("click", runSearch);
+document.getElementById("clear-search-btn").addEventListener("click", clearResults);
+
+let searchTimeout;
+document.getElementById("search-input").addEventListener("input", () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(runSearch, 250);
+});
+document.getElementById("search-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") runSearch();
+});
+
+document.querySelectorAll(".js-focus-search").forEach(link => {
+  link.addEventListener("click", () => {
+    setTimeout(() => document.getElementById("search-input").focus(), 50);
+  });
+});
+
+document.querySelectorAll(".mood-pill").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const instrumentalOnlyEl = document.getElementById("instrumental-only");
+    currentQueryType = "mood";
+    currentQueryValue = btn.dataset.mood;
+    currentMoodInstrumentalOnly = !!(instrumentalOnlyEl && instrumentalOnlyEl.checked);
+    loadResultsPage(true);
+  });
+});
+
+document.getElementById("new-playlist-btn").addEventListener("click", () => {
+  const name = prompt("Playlist name:");
+  if (!name) return;
+  fetch("{{ url_for('playlists.api_create') }}", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name}),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) window.location.reload();
+      else alert(data.error || "Couldn't create playlist.");
+    });
+});
+</script>
+{% endblock %}

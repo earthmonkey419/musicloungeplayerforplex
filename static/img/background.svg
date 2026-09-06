@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1200" width="100%" height="100%" preserveAspectRatio="xMidYMin slice">
+  <defs>
+    <!-- Background Cream Canvas Glow -->
+    <radialGradient id="bgGlow" cx="50%" cy="45%" r="65%">
+      <stop offset="0%" stop-color="#FCF8ED"/>
+      <stop offset="60%" stop-color="#F7F1E1"/>
+      <stop offset="100%" stop-color="#EDE4CE"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1000" height="1200" fill="url(#bgGlow)"/>
+
+  <!-- Subtle Jukebox Graphic Container -->
+  <g opacity="0.25" transform="translate(150, 80)">
+
+    <!-- Outer Deep Red Arch Body -->
+    <path d="M 50 1100 L 50 350 A 300 300 0 0 1 650 350 L 650 1100 Z" fill="#D9383A"/>
+
+    <!-- Top Crimson Center Accent Stripe -->
+    <rect x="310" y="50" width="80" height="120" fill="#9B1C1E"/>
+
+    <!-- Horizontal Crimson Trim Bands -->
+    <rect x="50" y="420" width="600" height="40" fill="#9B1C1E"/>
+    <rect x="50" y="1020" width="600" height="40" fill="#9B1C1E"/>
+
+    <!-- Inner Dark Charcoal Frame -->
+    <path d="M 175 1100 L 175 275 A 175 175 0 0 1 525 275 L 525 1100 Z" fill="#1E282A"/>
+
+    <!-- Upper Arch Window (Warm Cream) -->
+    <path d="M 230 420 L 230 290 A 120 120 0 0 1 470 290 L 470 420 Z" fill="#FCF8ED"/>
+
+    <!-- Middle Display Bar (Bright Red Accent) -->
+    <rect x="230" y="450" width="240" height="100" fill="#E84A4C"/>
+
+    <!-- Lower Glass Tube Arch (Soft Red/Rose Fill) -->
+    <path d="M 230 600 L 230 840 A 120 120 0 0 0 470 840 L 470 600 Z" fill="#F49293"/>
+    <path d="M 280 600 L 280 820 A 70 70 0 0 0 420 820 L 420 600 Z" fill="#1E282A"/>
+
+  </g>
+</svg>

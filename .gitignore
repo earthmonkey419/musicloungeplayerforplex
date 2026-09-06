@@ -1,0 +1,8 @@
+config.py
+*.db
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+@eaDir/

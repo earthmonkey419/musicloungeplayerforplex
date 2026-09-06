@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Share Some Music — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+<div style="text-align:center; margin:var(--pl-space-lg) 0 24px;">
+  <h1 style="font-size:36px; line-height:44px;">🎁 Share Some Music</h1>
+  <p style="color:var(--pl-text-secondary); margin-top:4px;">Send an album, artist, or playlist — theirs for a little while.</p>
+</div>
+
+<div id="flow-stages" class="stage-grid">
+  <div class="pl-card pl-card-surface">
+    <div class="stage-num">1</div>
+    <h3 style="font-size:16px; margin-bottom:4px;">What are you sharing?</h3>
+    <p class="pl-caption" style="margin:0 0 14px;">Choose the type of content.</p>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div class="stage-chip" style="width:100%;" onclick="selectType('track', this)">SONG</div>
+      <div class="stage-chip" style="width:100%;" onclick="selectType('album', this)">ALBUM</div>
+      <div class="stage-chip" style="width:100%;" onclick="selectType('playlist', this)">PLAYLIST</div>
+      <div class="stage-chip" style="width:100%;" onclick="selectType('artist', this)">ARTIST</div>
+    </div>
+  </div>
+
+  <div class="pl-card pl-card-surface">
+    <div class="stage-num">2</div>
+    <h3 style="font-size:16px; margin-bottom:4px;">Choose it</h3>
+    <p class="pl-caption" style="margin:0 0 14px;">Search your Plex library.</p>
+    <input type="search" id="content-search" class="pl-text-input" style="width:100%;" placeholder="Pick a type first…" disabled oninput="debouncedContentSearch()">
+    <div id="content-results" style="margin-top:12px; display:flex; flex-direction:column; gap:6px;"></div>
+  </div>
+
+  <div class="pl-card pl-card-surface">
+    <div class="stage-num">3</div>
+    <h3 style="font-size:16px; margin-bottom:4px;">How long?</h3>
+    <p class="pl-caption" style="margin:0 0 14px;">Link expires after:</p>
+    <div style="display:flex; gap:8px;">
+      {% for hrs in durations %}
+      <div class="stage-chip" style="flex:1;" onclick="selectDuration({{ hrs }}, this)">{{ hrs }} HRS</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center; margin-top:var(--pl-space-lg);">
+  <button id="create-link-btn" class="pl-btn pl-btn-primary" style="font-size:16px; padding:14px 32px;" disabled onclick="createLink()">🔗 Create Link</button>
+  <p id="create-error" style="color:var(--pl-red); font-weight:700; margin-top:10px; display:none;"></p>
+</div>
+
+<div id="confirm-panel" class="pl-card pl-card-neutral" style="max-width:480px; margin:var(--pl-space-lg) auto 0; text-align:center; display:none;">
+  <div style="font-size:40px;">✅</div>
+  <h2 style="margin:8px 0 4px;">Your lounge pass is ready.</h2>
+  <p id="confirm-summary" style="color:var(--pl-text-secondary); margin-bottom:16px;"></p>
+
+  <div style="display:flex; gap:8px; margin-bottom:16px;">
+    <input type="text" id="share-url-display" readonly class="pl-text-input" style="flex:1;">
+    <button class="pl-btn pl-btn-primary" onclick="copyShareLink()">Copy</button>
+  </div>
+
+  <details style="text-align:left; margin-top:16px;">
+    <summary style="cursor:pointer; font-weight:700; color:var(--pl-text);">📧 Email it instead</summary>
+    <div style="margin-top:12px; display:flex; flex-direction:column; gap:10px;">
+      <input type="email" id="email-recipient" class="pl-text-input" placeholder="their@email.com">
+      <input type="text" id="email-display-name" class="pl-text-input" placeholder="Your name (shown as sender)">
+      <button class="pl-btn pl-btn-mint" onclick="emailShare()">Send Email</button>
+      <p id="email-status" style="font-size:13px; margin:0;"></p>
+    </div>
+  </details>
+
+  <button class="btn-secondary" style="margin-top:20px;" onclick="location.reload()">Create Another Link</button>
+</div>
+
+<script>
+let selectedType = null;
+let selectedContent = null;
+let selectedDuration = null;
+let currentShareUrl = null;
+let currentShareToken = null;
+
+function selectType(type, el) {
+  selectedType = type;
+  document.querySelectorAll('#flow-stages .pl-card:nth-child(1) .stage-chip').forEach(c => c.classList.remove('stage-chip-selected'));
+  el.classList.add('stage-chip-selected');
+  const input = document.getElementById('content-search');
+  input.disabled = false;
+  input.placeholder = `Search ${type}s…`;
+  input.value = '';
+  document.getElementById('content-results').innerHTML = '';
+  selectedContent = null;
+  updateCreateButton();
+}
+
+let searchTimer = null;
+function debouncedContentSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runContentSearch, 350);
+}
+
+function runContentSearch() {
+  const q = document.getElementById('content-search').value.trim();
+  const el = document.getElementById('content-results');
+  if (!q || !selectedType) { el.innerHTML = ''; return; }
+  fetch(`/admin/share/api/search?type=${selectedType}&q=${encodeURIComponent(q)}`)
+    .then(r => r.json())
+    .then(items => {
+      if (items.error) {
+        el.innerHTML = `<p class="pl-caption">Couldn't reach the library right now.</p>`;
+        return;
+      }
+      if (items.length === 0) {
+        el.innerHTML = `<p class="pl-caption">No matches.</p>`;
+        return;
+      }
+      el.innerHTML = items.map(item => `
+        <button class="stage-result-btn" onclick='pickContent(${JSON.stringify(item)}, this)'>
+          <div>${item.title}</div>
+          <div class="pl-caption">${item.subtitle || ''}</div>
+        </button>`).join('');
+    })
+    .catch(console.error);
+}
+
+function pickContent(item, el) {
+  selectedContent = item;
+  document.querySelectorAll('#content-results .stage-result-btn').forEach(q => q.classList.remove('stage-result-btn-selected'));
+  el.classList.add('stage-result-btn-selected');
+  updateCreateButton();
+}
+
+function selectDuration(hrs, el) {
+  selectedDuration = hrs;
+  document.querySelectorAll('#flow-stages .pl-card:nth-child(3) .stage-chip').forEach(c => c.classList.remove('stage-chip-selected'));
+  el.classList.add('stage-chip-selected');
+  updateCreateButton();
+}
+
+function updateCreateButton() {
+  document.getElementById('create-link-btn').disabled = !(selectedType && selectedContent && selectedDuration);
+}
+
+function createLink() {
+  const errEl = document.getElementById('create-error');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('create-link-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+
+  fetch('/admin/share/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      content_type: selectedType,
+      content_ref: selectedContent.content_ref,
+      content_title: selectedContent.title,
+      content_artist: selectedContent.subtitle,
+      duration_hours: selectedDuration,
+    }),
+  })
+    .then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+      return data;
+    })
+    .then(data => {
+      currentShareUrl = data.share_url;
+      currentShareToken = data.token;
+      document.getElementById('flow-stages').style.display = 'none';
+      btn.style.display = 'none';
+      document.getElementById('confirm-summary').textContent =
+        `${selectedContent.title} — expires in ${selectedDuration} hours`;
+      document.getElementById('share-url-display').value = currentShareUrl;
+      document.getElementById('confirm-panel').style.display = 'block';
+    })
+    .catch(err => {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = '🔗 Create Link';
+    });
+}
+
+function copyShareLink() {
+  navigator.clipboard.writeText(currentShareUrl).then(() => alert('Link copied!'));
+}
+
+function emailShare() {
+  const email = document.getElementById('email-recipient').value.trim();
+  const displayName = document.getElementById('email-display-name').value.trim();
+  const statusEl = document.getElementById('email-status');
+  if (!email) { statusEl.textContent = 'Enter an email address.'; statusEl.style.color = 'var(--pl-red)'; return; }
+
+  statusEl.textContent = 'Sending…';
+  statusEl.style.color = 'var(--pl-text-secondary)';
+
+  fetch(`/admin/share/${currentShareToken}/email`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({email: email, from_display_name: displayName}),
+  })
+    .then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Send failed.');
+      return data;
+    })
+    .then(() => {
+      statusEl.textContent = 'Sent!';
+      statusEl.style.color = 'var(--pl-text)';
+    })
+    .catch(err => {
+      statusEl.textContent = err.message;
+      statusEl.style.color = 'var(--pl-red)';
+    });
+}
+</script>
+{% endblock %}
