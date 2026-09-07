@@ -139,12 +139,18 @@ def _room_state(room_id):
 
 @bp.route("/api/room-state")
 def api_room_state():
-    room_id = session.get("room_id")
-    if not room_id:
-        room = db.get_active_room()
-        room_id = room["session_id"] if room else None
-    if not room_id:
-        return jsonify({"error": "no active room"}), 404
+    # Previously had its own separate resolution logic that trusted
+    # session["room_id"] with no liveness check -- if this same
+    # browser/device had EVER joined a different room as a guest
+    # before, that old (possibly long-ended) room_id would be reused
+    # forever, silently overriding whichever room is actually active
+    # now. This is exactly what _resolve_action_room() already guards
+    # against (checks is_room_live() first, and always prioritizes the
+    # admin's actual current room over a stale guest session) -- reuse
+    # it here instead of duplicating a less-safe version.
+    room_id, err = _resolve_action_room()
+    if err:
+        return err
     state = _room_state(room_id)
     return jsonify(state) if state else (jsonify({"error": "not found"}), 404)
 

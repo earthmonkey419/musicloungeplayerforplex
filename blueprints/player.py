@@ -12,11 +12,54 @@ bp = Blueprint("player", __name__)
 @admin_required
 def index():
     playlists = [dict(p) for p in db.list_playlists()]
+    recent_plays = [dict(p) for p in db.get_recent_plays(limit=10)]
     return render_template(
         "player.html",
         playlists=playlists,
+        recent_plays=recent_plays,
         musicmind_available=musicmind_bridge.is_available(),
     )
+
+
+@bp.route("/api/player/log-play", methods=["POST"])
+@admin_required
+def api_log_play():
+    body = request.get_json(silent=True) or {}
+    rating_key = body.get("rating_key")
+    if not rating_key:
+        return jsonify({"error": "Missing rating_key."}), 400
+    try:
+        db.log_play({
+            "rating_key": rating_key,
+            "title": body.get("title", ""),
+            "artist": body.get("artist", ""),
+        })
+        return jsonify({"ok": True})
+    except Exception:
+        current_app.logger.exception("Failed to log play for rating_key=%r", rating_key)
+        return jsonify({"ok": False}), 200
+
+
+@bp.route("/api/player/queue", methods=["GET"])
+@admin_required
+def api_get_queue():
+    return jsonify(db.get_player_queue())
+
+
+@bp.route("/api/player/queue", methods=["POST"])
+@admin_required
+def api_save_queue():
+    body = request.get_json(silent=True) or {}
+    queue = body.get("queue", [])
+    current_index = body.get("current_index", -1)
+    if not isinstance(queue, list):
+        return jsonify({"error": "queue must be a list"}), 400
+    try:
+        db.save_player_queue(queue, current_index)
+        return jsonify({"ok": True})
+    except Exception:
+        current_app.logger.exception("Failed to save player queue")
+        return jsonify({"ok": False}), 200
 
 
 @bp.route("/api/player/search")

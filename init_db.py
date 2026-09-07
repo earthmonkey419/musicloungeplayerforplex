@@ -149,6 +149,29 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
 )
 """)
 
+# ---------------------------------------------------------------
+# Player: play_history (NEW)
+#
+# One row per "real" play -- logged client-side by
+# static/js/play-history.js once a track crosses a listened-duration
+# threshold (30s or half the track, whichever is smaller), so a quick
+# accidental skip never counts as a play. Only wired up on Player's
+# own pages (home, playlist detail) -- deliberately NOT on Room Mode
+# (driven by guests' choices, not the admin's own listening) or
+# /linked (a share recipient's own session on their own device, not
+# the admin's history to pollute).
+# ---------------------------------------------------------------
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS play_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    track_ref       TEXT NOT NULL,
+    title           TEXT,
+    artist          TEXT,
+    played_at       TEXT NOT NULL
+)
+""")
+
 conn.commit()
 conn.close()
 print(f"MusicLounge Player DB initialized at {config.DB_PATH}")

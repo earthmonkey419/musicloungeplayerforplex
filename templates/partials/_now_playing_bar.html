@@ -1,17 +1,29 @@
-<div id="now-playing-bar" class="now-playing-bar" hidden>
+<div id="now-playing-bar" class="now-playing-bar{% if hide_bar_ui %} now-playing-bar-page-hidden{% endif %}" hidden>
   <img id="np-art" class="np-art" alt="">
   <div class="np-info">
     <div id="np-title" class="np-title"></div>
     <div id="np-artist" class="np-artist"></div>
   </div>
   <div class="np-controls">
+    <button id="np-shuffle" class="np-btn-nav" title="Shuffle">🔀</button>
     <button id="np-prev" class="np-btn-nav" title="Previous">⏮</button>
     <button id="np-playpause" class="np-btn-play">▶</button>
     <button id="np-next" class="np-btn-nav" title="Next">⏭</button>
+    <button id="np-queue-btn" class="np-btn-nav" title="Queue">☰</button>
   </div>
   <div class="np-volume-wrap">
     <span class="np-volume-icon">🔊</span>
     <input id="np-volume" type="range" min="0" max="100" value="80">
   </div>
   <audio id="audio-el"></audio>
+</div>
+
+<div id="queue-modal" class="pl-modal-overlay" hidden>
+  <div class="pl-modal">
+    <div class="pl-modal-header">
+      <h3>Queue</h3>
+      <button id="queue-modal-close" class="pl-link-btn" title="Close">✕</button>
+    </div>
+    <ul id="queue-modal-list" class="track-list" style="max-height:400px; overflow-y:auto;"></ul>
+  </div>
 </div>

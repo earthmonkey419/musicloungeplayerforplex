@@ -1,41 +1,43 @@
 {% extends "base.html" %}
-{% block title %}{{ room["room_name"] }} — MusicLounge{% endblock %}
+{% block title %}{{ room["room_name"] }} — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav_minimal.html" %}{% endblock %}
 {% block content %}
-{% include "partials/_wordmark.html" %}
-<div style="text-align:center; margin:20px 0 24px;">
-  <h1 style="font-family:var(--font-display); font-size:40px; font-weight:700; margin:0;">{{ room["room_name"] }}</h1>
-  <p style="color:var(--ink-soft); margin-top:4px; font-size:14px;">You're in the room</p>
+<div style="text-align:center; margin:var(--pl-space-lg) 0 24px;">
+  <h1 style="font-size:32px;">{{ room["room_name"] }}</h1>
+  <p style="color:var(--pl-text-secondary); margin-top:4px; font-size:14px;">You're in the room</p>
 </div>
 
-<div class="card surface-hi" style="margin-top:20px;">
-  <div style="display:flex; justify-content:space-between; align-items:baseline;">
-    <div style="font-size:12px; font-weight:700; letter-spacing:0.06em; color:var(--orange-deep);">NOW PLAYING</div>
-  </div>
-  <div id="now-playing-block" style="margin-top:8px;">
+<div class="pl-card pl-card-surface">
+  <div class="room-card-label">NOW PLAYING</div>
+  <div id="now-playing-block">
     <p id="np-line" style="margin:0;">Nothing yet — search or pick a mood below to get started.</p>
   </div>
 
-  <div style="font-size:12px; font-weight:700; letter-spacing:0.06em; color:var(--orange-deep); margin-top:20px;">UP NEXT</div>
-  <div id="queue-list" style="margin-top:8px;">
-    <p style="color:var(--ink-soft); font-size:14px;">Queue's empty.</p>
-  </div>
+  <div class="room-card-label" style="margin-top:var(--pl-space-md);">UP NEXT</div>
+  <ul id="queue-list" class="track-list">
+    <li class="empty">Queue's empty.</li>
+  </ul>
 </div>
 
-<div class="card surface-hi" style="margin-top:20px;">
-  <h2 style="margin-bottom:14px;">What should we play?</h2>
-  <input type="search" id="search-input" placeholder="Search songs, artists, albums…" oninput="debouncedSearch()">
-
-  <div style="font-size:12px; font-weight:700; letter-spacing:0.06em; color:var(--orange-deep); margin:20px 0 10px;">BROWSE BY MOOD</div>
-  <div class="chip-grid">
-    <div class="chip" onclick="loadMood('funk')">FUNK</div>
-    <div class="chip" onclick="loadMood('soul')">SOUL</div>
-    <div class="chip" onclick="loadMood('jazz')">JAZZ</div>
-    <div class="chip" onclick="loadMood('dance')">DANCE</div>
-    <div class="chip" onclick="loadMood('chill')">CHILL</div>
-    <div class="chip" onclick="loadMood('rock')">ROCK</div>
+<div class="pl-card pl-card-surface" style="margin-top:var(--pl-space-md);">
+  <h3 style="margin-bottom:var(--pl-space-sm);">What should we play?</h3>
+  <div class="pl-search-input-wrap">
+    <span class="pl-search-icon">⌕</span>
+    <input type="search" id="search-input" placeholder="Search songs, artists, albums…" oninput="debouncedSearch()">
   </div>
 
-  <div id="results" style="margin-top:20px;"></div>
+  <div class="pl-chip-row" style="margin-top:var(--pl-space-md);">
+    <span class="pl-chip-label">Browse by mood</span>
+    <button class="mood-pill" onclick="loadMood('funk')">Funk</button>
+    <button class="mood-pill" onclick="loadMood('soul')">Soul</button>
+    <button class="mood-pill" onclick="loadMood('jazz')">Jazz</button>
+    <button class="mood-pill" onclick="loadMood('dance')">Dance</button>
+    <button class="mood-pill" onclick="loadMood('chill')">Chill</button>
+    <button class="mood-pill" onclick="loadMood('rock')">Rock</button>
+  </div>
+
+  <ul id="results" class="track-list" style="margin-top:var(--pl-space-md);"></ul>
 </div>
 
 <script>
@@ -64,19 +66,22 @@ function loadMood(mood) {
 function renderResults(tracks) {
   const el = document.getElementById("results");
   if (tracks.error) {
-    el.innerHTML = `<p style="color:var(--ink-soft);">Couldn't reach the library right now — try again in a moment.</p>`;
+    el.innerHTML = `<li class="empty">Couldn't reach the library right now — try again in a moment.</li>`;
     return;
   }
   if (tracks.length === 0) {
-    el.innerHTML = `<p style="color:var(--ink-soft);">No matches. Try another search or mood.</p>`;
+    el.innerHTML = `<li class="empty">No matches. Try another search or mood.</li>`;
     return;
   }
   el.innerHTML = tracks.map(t => `
-    <div class="queue-item">
-      <img class="art-sm" src="/art/${t.rating_key}" onerror="this.style.opacity=0">
-      <div style="flex:1;">${t.title} <span style="color:var(--ink-soft);">— ${t.artist}</span></div>
-      <button class="btn btn-primary" style="padding:8px 14px; font-size:13px;" onclick="addToQueue('${t.rating_key}', this)">+ ADD</button>
-    </div>`).join("");
+    <li class="track-row">
+      <img class="track-art" src="/art/${t.rating_key}" onerror="this.style.opacity=0">
+      <div class="track-meta">
+        <div class="track-title">${t.title}</div>
+        <div class="track-artist">${t.artist}</div>
+      </div>
+      <button class="pl-btn pl-btn-primary" style="padding:8px 14px; font-size:13px;" onclick="addToQueue('${t.rating_key}', this)">+ Add</button>
+    </li>`).join("");
 }
 
 function addToQueue(ratingKey, btn) {
@@ -114,19 +119,23 @@ function refreshQueue() {
       if (state.error) return;
       const npLine = document.getElementById("np-line");
       if (state.now_playing) {
-        npLine.innerHTML = `<strong>${state.now_playing.title}</strong> <span style="color:var(--ink-soft);">— ${state.now_playing.artist}</span>`;
+        npLine.innerHTML = `<strong>${state.now_playing.title}</strong> <span style="color:var(--pl-text-secondary);">— ${state.now_playing.artist}</span>`;
       } else {
         npLine.textContent = "Nothing yet — search or pick a mood below to get started.";
       }
       const list = document.getElementById("queue-list");
       if (state.queue.length === 0) {
-        list.innerHTML = `<p style="color:var(--ink-soft); font-size:14px;">Queue's empty.</p>`;
+        list.innerHTML = `<li class="empty">Queue's empty.</li>`;
       } else {
         list.innerHTML = state.queue.map((item, i) => `
-          <div class="queue-item">
-            <span class="pos">${String(i+1).padStart(2,"0")}</span><img class="art-sm" src="/art/${item.track_ref}" onerror="this.style.opacity=0">
-            <div style="flex:1;">${item.title} <span style="color:var(--ink-soft);">— ${item.artist}</span></div>
-          </div>`).join("");
+          <li class="track-row">
+            <span class="room-queue-pos">${String(i+1).padStart(2,"0")}</span>
+            <img class="track-art" src="/art/${item.track_ref}" onerror="this.style.opacity=0">
+            <div class="track-meta">
+              <div class="track-title">${item.title}</div>
+              <div class="track-artist">${item.artist}</div>
+            </div>
+          </li>`).join("");
       }
     })
     .catch(console.error);

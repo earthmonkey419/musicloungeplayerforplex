@@ -1,14 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Link expired -- MusicLounge{% endblock %}
+{% block title %}Link expired — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav_minimal.html" %}{% endblock %}
 {% block content %}
-<div class="home-hero">
-  <img src="{{ url_for('static', filename='hero-logo.jpg') }}" alt="MusicLounge -- Jukebox for Plex" class="hero-logo">
-</div>
-
-<div class="card surface-hi" style="max-width:480px; margin:24px auto; text-align:center;">
+<div class="pl-card pl-card-surface" style="max-width:480px; margin:80px auto; text-align:center;">
   <div style="font-size:40px;">🎟️</div>
   <h2 style="margin:8px 0 4px;">This link has expired.</h2>
-  <p style="color:var(--ink-soft); margin-bottom:0;">
+  <p style="color:var(--pl-text-secondary); margin-bottom:0;">
     Share links are only good for a little while. Ask whoever sent
     this one for a fresh link.
   </p>

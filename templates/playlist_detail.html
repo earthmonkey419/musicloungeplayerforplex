@@ -25,6 +25,7 @@
       <div class="track-artist">{{ t['artist'] }}</div>
     </div>
     <button class="track-play" title="Play">▶</button>
+    <button class="track-enqueue" title="Add to queue">⏬</button>
     {% if playlist['source'] == 'native' %}
     <button class="track-remove" data-row-id="{{ t['id'] }}" title="Remove">✕</button>
     {% endif %}
@@ -46,6 +47,9 @@
 {% include "partials/_now_playing_bar.html" %}
 
 <script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+<script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
 <script>
 const PLAYLIST_SOURCE = {{ playlist['source']|tojson }};
 
@@ -60,6 +64,12 @@ function currentTracks() {
 document.querySelectorAll(".track-play").forEach((btn, i) => {
   btn.addEventListener("click", () => {
     MLPlayer.playQueue(currentTracks(), i);
+  });
+});
+
+document.querySelectorAll(".track-enqueue").forEach((btn, i) => {
+  btn.addEventListener("click", () => {
+    MLPlayer.enqueue(currentTracks()[i]);
   });
 });
 

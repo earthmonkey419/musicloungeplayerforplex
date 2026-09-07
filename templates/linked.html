@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ content_title }} -- MusicLounge{% endblock %}
+{% block title %}{{ content_title }} — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav_minimal.html" %}{% endblock %}
 {% block og_tags %}
 <meta property="og:title" content="{{ content_title }}{% if content_artist %} -- {{ content_artist }}{% endif %}">
 <meta property="og:description" content="Someone shared this with you on MusicLounge. Tap to listen -- no account needed.">
@@ -8,54 +10,45 @@
 <meta name="twitter:card" content="summary_large_image">
 {% endblock %}
 {% block content %}
-<div style="display:flex; justify-content:space-between; align-items:center;">
-  {% include "partials/_wordmark.html" %}
-  <span class="countdown" id="countdown">expires soon</span>
+<div style="display:flex; justify-content:flex-end; margin:var(--pl-space-md) 0;">
+  <span id="countdown" class="pl-caption" style="background:var(--pl-surface); padding:6px 12px; border-radius:999px; border:1px solid var(--pl-border);">expires soon</span>
 </div>
 
-<audio id="player" preload="auto"></audio>
+<div class="pl-card pl-card-surface" style="text-align:center; max-width:560px; margin:0 auto;">
+  <img id="hero-art" src="/art/{{ share['content_ref'] }}" onerror="this.style.opacity=0" style="width:220px; height:220px; border-radius:var(--pl-radius-md); object-fit:cover; margin-bottom:var(--pl-space-md);">
+  <h2 style="font-size:24px; margin:0;">{{ content_title }}</h2>
+  {% if content_artist %}<p style="color:var(--pl-text-secondary); margin:4px 0 var(--pl-space-md);">{{ content_artist }}</p>{% endif %}
 
-<div class="linked-player">
-  <img id="hero-art" class="art-lg" src="/art/{{ share['content_ref'] }}" onerror="this.style.opacity=0">
-  <h2 style="font-size:24px;">{{ content_title }}</h2>
-  {% if content_artist %}<p style="color:var(--ink-soft); margin:4px 0 20px;">{{ content_artist }}</p>{% endif %}
-
-  <div class="card surface-hi" style="text-align:left; margin-bottom:20px;">
-    <div style="font-size:12px; font-weight:700; letter-spacing:0.06em; color:var(--orange-deep); margin-bottom:6px;">NOW PLAYING</div>
-    <div id="now-playing-title" style="font-weight:700;">Nothing playing yet</div>
-    <div id="now-playing-artist" style="color:var(--ink-soft); font-size:14px;"></div>
+  <div class="room-transport" style="justify-content:center; margin-bottom:var(--pl-space-md);">
+    <button id="shuffle-btn" class="room-transport-btn" onclick="toggleShuffle()" title="Shuffle">🔀</button>
+    <button class="room-transport-btn" onclick="prevTrack()" title="Previous">⏮</button>
+    <button id="playpause-btn" class="room-transport-play" onclick="togglePlayPause()">▶</button>
+    <button class="room-transport-btn" onclick="nextTrack()" title="Next">⏭</button>
   </div>
 
-  <div class="track-list">
+  <ul id="track-list" class="track-list" style="text-align:left;">
     {% for t in tracks %}
-    <div class="track-row" style="cursor:pointer;" onclick="playTrack({{ loop.index0 }})" id="track-row-{{ loop.index0 }}">
-      <span>{{ loop.index }}. {{ t["title"] }}</span>
-      <span>{{ "%d:%02d"|format(t["duration_sec"] // 60, t["duration_sec"] % 60) }}</span>
-    </div>
+    <li class="track-row" style="cursor:pointer;" onclick="playTrackAt({{ loop.index0 }})" id="track-row-{{ loop.index0 }}">
+      <div class="track-meta">
+        <div class="track-title">{{ loop.index }}. {{ t["title"] }}</div>
+      </div>
+      <div class="pl-caption">{{ "%d:%02d"|format(t["duration_sec"] // 60, t["duration_sec"] % 60) }}</div>
+    </li>
     {% else %}
-    <p style="color:var(--ink-soft);">Nothing to play -- this content may no longer be available.</p>
+    <li class="empty">Nothing to play -- this content may no longer be available.</li>
     {% endfor %}
-  </div>
-
-  <div class="transport" style="justify-content:center; margin-top:20px;">
-    <button id="shuffle-btn" class="btn btn-round" onclick="toggleShuffle()" title="Shuffle">🔀</button>
-    <button class="btn btn-round" onclick="prevTrack()">⏮</button>
-    <button id="playpause-btn" class="btn btn-round btn-primary" onclick="togglePlayPause()">▶</button>
-    <button class="btn btn-round" onclick="nextTrack()">⏭</button>
-  </div>
+  </ul>
 </div>
 
-<button id="back-to-top" class="btn btn-round btn-primary" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Back to top" style="position:fixed; bottom:24px; right:24px; z-index:10; display:none;">⬆</button>
+{% set hide_bar_ui = true %}
+{% include "partials/_now_playing_bar.html" %}
+<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+
+<button id="back-to-top" class="pl-back-to-top" style="position:fixed; bottom:24px; right:24px; z-index:10; display:none;" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Back to top">↑ Top</button>
 
 <script>
 const TRACKS = {{ tracks|tojson }};
 const EXPIRES_AT = {{ share["expires_at"]|tojson }};
-const audioEl = document.getElementById("player");
-let currentIndex = -1;
-
-let shuffleOn = false;
-let shuffleQueue = [];
-let playHistory = [];
 
 function highlightRow(i) {
   document.querySelectorAll(".track-row").forEach(el => el.style.fontWeight = "normal");
@@ -63,80 +56,39 @@ function highlightRow(i) {
   if (row) row.style.fontWeight = "700";
 }
 
-function rebuildShuffleQueue() {
-  shuffleQueue = TRACKS.map((_, i) => i).filter(i => i !== currentIndex);
-  for (let i = shuffleQueue.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
-  }
-}
-
-function toggleShuffle() {
-  shuffleOn = !shuffleOn;
-  document.getElementById("shuffle-btn").classList.toggle("btn-primary", shuffleOn);
-  if (shuffleOn) {
-    playHistory = [];
-    rebuildShuffleQueue();
-  }
-}
-
-function playTrack(i, fromShuffleAdvance) {
-  if (i < 0 || i >= TRACKS.length) return;
-
-  if (shuffleOn && !fromShuffleAdvance) {
-    if (currentIndex !== -1) playHistory.push(currentIndex);
-    const idx = shuffleQueue.indexOf(i);
-    if (idx !== -1) shuffleQueue.splice(idx, 1);
-  }
-
-  currentIndex = i;
-  audioEl.src = "/stream/" + TRACKS[i].rating_key;
-  audioEl.load();
-  audioEl.play().catch(() => {});
-  document.getElementById("hero-art").src = "/art/" + TRACKS[i].rating_key;
-  document.getElementById("now-playing-title").textContent = TRACKS[i].title;
-  document.getElementById("now-playing-artist").textContent = TRACKS[i].artist || "";
-  highlightRow(i);
-  document.getElementById("playpause-btn").textContent = "⏸";
+function playTrackAt(i) {
+  MLPlayer.playQueue(TRACKS, i);
 }
 
 function togglePlayPause() {
-  if (currentIndex === -1) { playTrack(0); return; }
-  if (audioEl.paused) {
-    audioEl.play();
-    document.getElementById("playpause-btn").textContent = "⏸";
-  } else {
-    audioEl.pause();
-    document.getElementById("playpause-btn").textContent = "▶";
-  }
+  if (!MLPlayer.getCurrent()) { playTrackAt(0); return; }
+  if (MLPlayer.isPaused()) MLPlayer.resume(); else MLPlayer.pause();
 }
 
 function nextTrack() {
-  if (shuffleOn) {
-    if (currentIndex !== -1) playHistory.push(currentIndex);
-    if (shuffleQueue.length === 0) {
-      rebuildShuffleQueue();
-      if (shuffleQueue.length === 0) return;
-    }
-    const next = shuffleQueue.shift();
-    playTrack(next, true);
-  } else {
-    if (currentIndex + 1 < TRACKS.length) playTrack(currentIndex + 1);
-  }
+  if (!MLPlayer.getCurrent()) { playTrackAt(0); return; }
+  document.getElementById("np-next").click();
 }
 
 function prevTrack() {
-  if (shuffleOn) {
-    if (playHistory.length > 0) {
-      const prev = playHistory.pop();
-      playTrack(prev, true);
-    }
-  } else {
-    if (currentIndex > 0) playTrack(currentIndex - 1);
-  }
+  if (!MLPlayer.getCurrent()) return;
+  document.getElementById("np-prev").click();
 }
 
-audioEl.addEventListener("ended", nextTrack);
+function toggleShuffle() {
+  const on = !MLPlayer.isShuffleOn();
+  MLPlayer.setShuffle(on);
+  document.getElementById("shuffle-btn").classList.toggle("np-shuffle-on", on);
+}
+
+MLPlayer.onChange(({ track, index, isPaused }) => {
+  document.getElementById("playpause-btn").textContent = isPaused ? "▶" : "⏸";
+  if (track) {
+    document.getElementById("hero-art").style.opacity = 1;
+    document.getElementById("hero-art").src = "/art/" + track.rating_key;
+    if (typeof index === "number") highlightRow(index);
+  }
+});
 
 function updateCountdown() {
   const expires = new Date(EXPIRES_AT + "Z").getTime();

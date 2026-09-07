@@ -85,10 +85,26 @@
     <div class="pl-section-header">
       <h2>Recently Played</h2>
     </div>
+    {% if recent_plays %}
+    <ul class="track-list">
+      {% for t in recent_plays %}
+      <li class="track-row" data-ref="{{ t['track_ref'] }}" data-title="{{ t['title'] }}" data-artist="{{ t['artist'] }}">
+        <img class="track-art" src="/art/{{ t['track_ref'] }}" alt="">
+        <div class="track-meta">
+          <div class="track-title">{{ t['title'] }}</div>
+          <div class="track-artist">{{ t['artist'] }}</div>
+        </div>
+        <button class="track-play" title="Play">▶</button>
+        <button class="track-enqueue" title="Add to queue">⏬</button>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
     <p class="pl-empty-note">
-      Not tracked yet — Player doesn't keep listening history in this version.
-      This section is reserved for that once it's built.
+      Nothing played yet — once you've listened to something for a bit,
+      it'll show up here.
     </p>
+    {% endif %}
   </section>
 </section>
 
@@ -116,6 +132,9 @@ const nativePlaylists = {{ playlists | selectattr('source', 'equalto', 'native')
 </script>
 
 <script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+<script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
 <script>
 const resultsSection = document.getElementById("results-section");
 const defaultView = document.getElementById("default-view");
@@ -150,11 +169,13 @@ function trackRow(t, indexInAllLoaded) {
       <div class="track-artist">${t.artist}</div>
     </div>
     <button class="track-play" title="Play">▶</button>
+    <button class="track-enqueue" title="Add to queue">⏬</button>
     <button class="track-add" title="Add to playlist">+</button>
   `;
   li.querySelector(".track-play").addEventListener("click", () => {
     MLPlayer.playQueue(allLoadedTracks, indexInAllLoaded);
   });
+  li.querySelector(".track-enqueue").addEventListener("click", () => MLPlayer.enqueue(t));
   li.querySelector(".track-add").addEventListener("click", () => openAddToPlaylist(t));
   return li;
 }
@@ -404,5 +425,20 @@ document.getElementById("new-playlist-btn").addEventListener("click", () => {
       else alert(data.error || "Couldn't create playlist.");
     });
 });
+
+document.querySelectorAll("#default-view .pl-recently-played .track-row").forEach((row, i, allRows) => {
+  const tracks = Array.from(allRows).map(r => ({
+    rating_key: r.dataset.ref,
+    title: r.dataset.title,
+    artist: r.dataset.artist,
+  }));
+  row.querySelector(".track-play").addEventListener("click", () => {
+    MLPlayer.playQueue(tracks, i);
+  });
+  row.querySelector(".track-enqueue").addEventListener("click", () => {
+    MLPlayer.enqueue(tracks[i]);
+  });
+});
 </script>
+
 {% endblock %}

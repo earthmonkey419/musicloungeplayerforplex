@@ -10,6 +10,7 @@ import random
 import string
 import secrets
 import uuid
+import json
 from datetime import datetime, timedelta
 
 import config
@@ -550,3 +551,74 @@ def mark_playlist_exported(playlist_id, plex_ref):
     )
     conn.commit()
     conn.close()
+
+
+# --- Play history (Player's own pages only -- see init_db.py) -------------
+
+def log_play(track):
+    """Records one real play. Called client-side once a track crosses
+    the listened-duration threshold -- see static/js/play-history.js."""
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO play_history (track_ref, title, artist, played_at) VALUES (?, ?, ?, ?)",
+        (str(track["rating_key"]), track.get("title"), track.get("artist"), _now()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_recent_plays(limit=10):
+    """Distinct tracks, most recent play first. Dedups by track_ref
+    (keeping each track's latest play time) rather than showing the
+    same song repeated if it was replayed -- "recently played" reads
+    better as variety than as a literal play-by-play log."""
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT track_ref, title, artist, MAX(played_at) as played_at
+           FROM play_history
+           GROUP BY track_ref
+           ORDER BY played_at DESC
+           LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return rows
+
+
+# --- Personal queue persistence (Player's own pages only) ------------------
+#
+# Reuses the existing generic config(key, value) table rather than a
+# new schema -- this is a singleton (one admin, one queue), stored as
+# one JSON blob under a fixed key. Room Mode's real relational queue
+# table is the right design for a multi-device shared queue; Player's
+# is just "remember what I had queued so a refresh doesn't lose it,"
+# which doesn't need that complexity.
+
+_PLAYER_QUEUE_KEY = "player_queue_state"
+
+
+def save_player_queue(queue, current_index):
+    value = json.dumps({"queue": queue, "current_index": current_index})
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO config (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (_PLAYER_QUEUE_KEY, value),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_player_queue():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM config WHERE key = ?", (_PLAYER_QUEUE_KEY,)).fetchone()
+    conn.close()
+    if not row:
+        return {"queue": [], "current_index": -1}
+    try:
+        data = json.loads(row["value"])
+        if not isinstance(data, dict) or not isinstance(data.get("queue"), list):
+            return {"queue": [], "current_index": -1}
+        return data
+    except (ValueError, TypeError):
+        return {"queue": [], "current_index": -1}

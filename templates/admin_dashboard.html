@@ -25,8 +25,6 @@
 </div>
 
 {% else %}
-<audio id="player" preload="auto"></audio>
-
 <div id="tap-to-play-banner" class="room-tap-banner" onclick="unlockAudio()">
   ▶ Tap here to start playback — your browser blocked autoplay
 </div>
@@ -36,13 +34,13 @@
     <div class="pl-card pl-card-surface">
       <div class="room-card-label">NOW PLAYING</div>
       <div class="room-now-playing">
-        <img id="np-art" class="room-art" src="{{ '/art/' + room['now_playing_ref']|string if room['now_playing_ref'] else '' }}" onerror="this.style.opacity=0" style="{{ '' if room['now_playing_ref'] else 'opacity:0;' }}">
+        <img id="room-np-art" class="room-art" src="{{ '/art/' + room['now_playing_ref']|string if room['now_playing_ref'] else '' }}" onerror="this.style.opacity=0" style="{{ '' if room['now_playing_ref'] else 'opacity:0;' }}">
         <div>
-          <h2 id="np-title" style="font-size:22px; margin:0;">{{ room["now_playing_title"] or "Nothing queued yet" }}</h2>
-          <p id="np-artist" class="pl-small" style="margin:4px 0 12px;">{{ room["now_playing_artist"] or "Add a song from the guest portal to get started" }}</p>
+          <h2 id="room-np-title" style="font-size:22px; margin:0;">{{ room["now_playing_title"] or "Nothing queued yet" }}</h2>
+          <p id="room-np-artist" class="pl-small" style="margin:4px 0 12px;">{{ room["now_playing_artist"] or "Add a song from the guest portal to get started" }}</p>
           <div class="room-transport">
             <button class="room-transport-btn" onclick="postAction('/api/skip')" title="Skip">⏭</button>
-            <button id="playpause-btn" class="room-transport-play" onclick="togglePlayPause()">{{ "⏸" if room["is_playing"] else "▶" }}</button>
+            <button id="room-playpause-btn" class="room-transport-play" onclick="togglePlayPause()">{{ "⏸" if room["is_playing"] else "▶" }}</button>
           </div>
         </div>
       </div>
@@ -80,41 +78,45 @@
   </div>
 </div>
 
+{% set hide_bar_ui = true %}
+{% include "partials/_now_playing_bar.html" %}
+<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+
 <script>
-const ROOM_ID = {{ room["session_id"]|tojson }};
 const JOIN_URL = {{ join_url|tojson }};
-const INITIAL_VOLUME = {{ room["volume"]|tojson }};
-
-const audioEl = document.getElementById("player");
 let currentTrackRef = {{ room["now_playing_ref"]|tojson }};
-audioEl.volume = INITIAL_VOLUME / 100;
 
-if (currentTrackRef) {
-  audioEl.src = "/stream/" + currentTrackRef;
+function currentTrackObj(title, artist) {
+  return { rating_key: currentTrackRef, title: title, artist: artist };
 }
 
-function attemptPlay() {
-  const p = audioEl.play();
-  if (p !== undefined) {
-    p.catch(() => {
-      document.getElementById("tap-to-play-banner").classList.add("room-tap-banner-visible");
-    });
-  }
+function showTapBanner() {
+  document.getElementById("tap-to-play-banner").classList.add("room-tap-banner-visible");
 }
 
 function unlockAudio() {
   document.getElementById("tap-to-play-banner").classList.remove("room-tap-banner-visible");
-  attemptPlay();
+  if (currentTrackRef) {
+    MLPlayer.attemptAutoplay(
+      currentTrackObj(document.getElementById("room-np-title").textContent, document.getElementById("room-np-artist").textContent),
+      showTapBanner
+    );
+  }
 }
 
 function togglePlayPause() {
-  if (audioEl.paused) attemptPlay(); else audioEl.pause();
+  if (MLPlayer.isPaused()) {
+    MLPlayer.attemptAutoplay(
+      currentTrackObj(document.getElementById("room-np-title").textContent, document.getElementById("room-np-artist").textContent),
+      showTapBanner
+    );
+  } else {
+    MLPlayer.pause();
+  }
   postAction("/api/playpause");
 }
 
-audioEl.addEventListener("ended", () => {
-  postAction("/api/skip");
-});
+MLPlayer.onEnded(() => postAction("/api/skip"));
 
 function postAction(path) {
   fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"})
@@ -129,21 +131,20 @@ function copyJoinLink() {
 
 function syncAudio(state) {
   if (!state.now_playing) {
-    audioEl.pause();
-    audioEl.removeAttribute("src");
+    MLPlayer.pause();
     currentTrackRef = null;
     return;
   }
+  const track = { rating_key: state.now_playing.ref, title: state.now_playing.title, artist: state.now_playing.artist };
   if (state.now_playing.ref !== currentTrackRef) {
     currentTrackRef = state.now_playing.ref;
-    audioEl.src = "/stream/" + currentTrackRef;
-    audioEl.load();
-    if (state.now_playing.is_playing) attemptPlay();
+    if (state.now_playing.is_playing) {
+      MLPlayer.attemptAutoplay(track, showTapBanner);
+    }
   } else {
-    if (state.now_playing.is_playing && audioEl.paused) attemptPlay();
-    if (!state.now_playing.is_playing && !audioEl.paused) audioEl.pause();
+    if (state.now_playing.is_playing && MLPlayer.isPaused()) MLPlayer.attemptAutoplay(track, showTapBanner);
+    if (!state.now_playing.is_playing && !MLPlayer.isPaused()) MLPlayer.pause();
   }
-  audioEl.volume = state.now_playing.volume / 100;
 }
 
 function refreshState() {
@@ -151,10 +152,10 @@ function refreshState() {
     .then(r => r.json())
     .then(state => {
       if (state.error) return;
-      document.getElementById("np-title").textContent = state.now_playing ? state.now_playing.title : "Nothing queued yet";
-      document.getElementById("np-artist").textContent = state.now_playing ? state.now_playing.artist : "Add a song from the guest portal to get started";
-      document.getElementById("playpause-btn").textContent = state.now_playing && state.now_playing.is_playing ? "⏸" : "▶";
-      const npArt = document.getElementById("np-art");
+      document.getElementById("room-np-title").textContent = state.now_playing ? state.now_playing.title : "Nothing queued yet";
+      document.getElementById("room-np-artist").textContent = state.now_playing ? state.now_playing.artist : "Add a song from the guest portal to get started";
+      document.getElementById("room-playpause-btn").textContent = state.now_playing && state.now_playing.is_playing ? "⏸" : "▶";
+      const npArt = document.getElementById("room-np-art");
       if (state.now_playing) {
         npArt.style.opacity = 1;
         npArt.src = "/art/" + state.now_playing.ref;
@@ -163,7 +164,7 @@ function refreshState() {
       }
       const list = document.getElementById("queue-list");
       if (state.queue.length === 0) {
-        list.innerHTML = '<li class="empty">Queue\\'s empty — send guests to the join link below.</li>';
+        list.innerHTML = '<li class="empty">Queue\'s empty — send guests to the join link below.</li>';
       } else {
         list.innerHTML = state.queue.map((item, i) => `
           <li class="track-row">
@@ -181,7 +182,10 @@ function refreshState() {
 }
 
 if (currentTrackRef && {{ (room["is_playing"] == 1)|tojson }}) {
-  attemptPlay();
+  MLPlayer.attemptAutoplay(
+    currentTrackObj({{ (room["now_playing_title"] or "")|tojson }}, {{ (room["now_playing_artist"] or "")|tojson }}),
+    showTapBanner
+  );
 }
 
 setInterval(refreshState, 4000);
