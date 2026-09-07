@@ -263,3 +263,74 @@ def track_stream_part(rating_key):
     a track."""
     track = get_track(rating_key)
     return track.media[0].parts[0].key
+
+
+# --- Library browsing (Artists -> Albums -> Tracklist) --------------------
+
+def list_all_artists():
+    """All artists, sorted alphabetically by title (actual sort order
+    applied at request time lives in library_browse.py). Uses
+    section.searchArtists() with no filter -- the same proven,
+    reliable call already used elsewhere, rather than any server-side
+    title-filtered call. added_at included for the "Recently Added"
+    sort option."""
+    section = get_music_section()
+    artists = section.searchArtists()
+    return sorted(
+        [
+            {
+                "rating_key": a.ratingKey,
+                "title": a.title,
+                "added_at": str(getattr(a, "addedAt", "") or ""),
+            }
+            for a in artists
+        ],
+        key=lambda a: a["title"].lower(),
+    )
+
+
+def list_all_albums():
+    """All albums across the whole library (not scoped to one artist)
+    -- for the top-level Albums browse view. Sorting happens in
+    library_browse.py; this is just the raw data fetch."""
+    section = get_music_section()
+    albums = section.albums()
+    return [
+        {
+            "rating_key": a.ratingKey,
+            "title": a.title,
+            "artist": getattr(a, "parentTitle", "") or "",
+            "year": getattr(a, "year", None),
+            "track_count": getattr(a, "leafCount", None),
+            "added_at": str(getattr(a, "addedAt", "") or ""),
+        }
+        for a in albums
+    ]
+
+
+def get_artist_detail(rating_key):
+    """Returns (artist_title, [album dicts]) for one artist, albums
+    sorted by year (newest first), falling back to title for albums
+    with no year set."""
+    artist = get_plex().fetchItem(int(rating_key))
+    albums = artist.albums()
+    album_dicts = [
+        {
+            "rating_key": a.ratingKey,
+            "title": a.title,
+            "year": getattr(a, "year", None),
+            "track_count": getattr(a, "leafCount", None),
+        }
+        for a in albums
+    ]
+    album_dicts.sort(key=lambda a: (-(a["year"] or 0), a["title"].lower()))
+    return artist.title, album_dicts
+
+
+def get_album_detail(rating_key):
+    """Returns (album_title, artist_title, [track dicts]) for one
+    album, tracks in their real album track order (not alphabetical --
+    album.tracks() already returns them in Plex's own track-order)."""
+    album = get_plex().fetchItem(int(rating_key))
+    tracks = album.tracks()
+    return album.title, album.parentTitle, [_track_to_dict(t) for t in tracks]

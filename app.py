@@ -15,6 +15,7 @@ Route map:
                        guests of a Room hosted from mlplayer land here
   /guest               Room Mode guest portal (search/browse/queue)
   /linked/<token>      Share Mode recipient view -- locked player
+  /browse              Library browsing -- Artists -> Albums -> Tracklist
 
 Room Mode + Share Mode + Linked + Admin are reused as code from the
 musiclounge repo, unchanged -- see MUSICLOUNGE-PLAYER-V1-SCOPE.md.
@@ -45,6 +46,7 @@ def create_app():
     from blueprints.room import bp as room_bp
     from blueprints.share import bp as share_bp
     from blueprints.linked import bp as linked_bp
+    from blueprints.browse import bp as browse_bp
 
     app.register_blueprint(player_bp)                          # "/" -- Player is the default view
     app.register_blueprint(playlists_bp, url_prefix="/playlists")
@@ -52,11 +54,13 @@ def create_app():
     app.register_blueprint(room_bp)                             # unprefixed, unchanged -- guest join/api/art/stream
     app.register_blueprint(share_bp, url_prefix="/admin/share")
     app.register_blueprint(linked_bp, url_prefix="/linked")
+    app.register_blueprint(browse_bp, url_prefix="/browse")
 
     @app.after_request
     def no_store(response):
         if "Cache-Control" not in response.headers:
-            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
         return response
 
     return app

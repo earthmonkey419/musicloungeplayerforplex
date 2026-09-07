@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ artist_title }} — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+<a href="{{ url_for('browse.artists') }}" class="link-manage">← All Artists</a>
+<h1 style="font-size:32px; margin:var(--pl-space-sm) 0 var(--pl-space-lg);">{{ artist_title }}</h1>
+
+<div class="browse-grid">
+  {% for album in albums %}
+  <a class="browse-tile" href="{{ url_for('browse.album_detail', rating_key=album['rating_key']) }}">
+    <img class="browse-tile-art" src="/art/{{ album['rating_key'] }}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="browse-tile-title">{{ album['title'] }}</div>
+    <div class="browse-tile-subtitle">{{ album['year'] or '' }}{% if album['year'] and album['track_count'] %} · {% endif %}{% if album['track_count'] %}{{ album['track_count'] }} tracks{% endif %}</div>
+  </a>
+  {% else %}
+  <p class="pl-empty-note">No albums found for this artist.</p>
+  {% endfor %}
+</div>
+
+{% include "partials/_now_playing_bar.html" %}
+
+<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+<script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
+{% if lastfm_active %}<script src="{{ url_for('static', filename='js/lastfm-scrobble.js') }}"></script>{% endif %}
+{% endblock %}

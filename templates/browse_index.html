@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Browse — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+<div class="pl-hero" style="padding: var(--pl-space-lg); margin-top: var(--pl-space-lg);">
+  <h1 style="font-size:32px; line-height:40px; margin-bottom:var(--pl-space-md);">Browse</h1>
+
+  <div style="display:flex; flex-wrap:wrap; gap:var(--pl-space-md); align-items:center;">
+    <div class="pl-chip-row" style="margin:0;">
+      <button class="mood-pill browse-type-btn" data-type="artists">Artists</button>
+      <button class="mood-pill browse-type-btn" data-type="albums">Albums</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <label class="pl-caption" for="sort-select">Sort by</label>
+      <select id="sort-select" class="pl-text-input" style="padding:8px 12px;"></select>
+    </div>
+  </div>
+</div>
+
+<div class="pl-results-section">
+  <div id="browse-scroll" class="pl-results-scroll" style="max-height:70vh;">
+    <div id="browse-grid" class="browse-grid"></div>
+  </div>
+  <button id="browse-back-to-top" class="pl-back-to-top" hidden title="Back to top">↑ Top</button>
+</div>
+
+{% include "partials/_now_playing_bar.html" %}
+
+<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+<script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
+<script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
+{% if lastfm_active %}<script src="{{ url_for('static', filename='js/lastfm-scrobble.js') }}"></script>{% endif %}
+
+<script>
+const SORT_OPTIONS = {
+  artists: [
+    { value: "title", label: "Name (A–Z)" },
+    { value: "added", label: "Recently Added" },
+  ],
+  albums: [
+    { value: "title", label: "Title (A–Z)" },
+    { value: "artist", label: "Artist (A–Z)" },
+    { value: "year", label: "Year (Newest)" },
+    { value: "added", label: "Recently Added" },
+  ],
+};
+
+const PAGE_SIZE = 48;
+const params = new URLSearchParams(window.location.search);
+let currentType = params.get("type") === "albums" ? "albums" : "artists";
+let currentSort = params.get("sort") || "title";
+let offset = 0;
+let hasMore = true;
+let loading = false;
+let observer = null;
+
+const scrollEl = document.getElementById("browse-scroll");
+const gridEl = document.getElementById("browse-grid");
+const backToTopBtn = document.getElementById("browse-back-to-top");
+const sortSelect = document.getElementById("sort-select");
+const typeButtons = document.querySelectorAll(".browse-type-btn");
+
+function updateUrl() {
+  const p = new URLSearchParams();
+  p.set("type", currentType);
+  p.set("sort", currentSort);
+  history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
+}
+
+function populateSortOptions() {
+  sortSelect.innerHTML = "";
+  SORT_OPTIONS[currentType].forEach(opt => {
+    const el = document.createElement("option");
+    el.value = opt.value;
+    el.textContent = opt.label;
+    if (opt.value === currentSort) el.selected = true;
+    sortSelect.appendChild(el);
+  });
+  if (!SORT_OPTIONS[currentType].some(o => o.value === currentSort)) {
+    currentSort = SORT_OPTIONS[currentType][0].value;
+    sortSelect.value = currentSort;
+  }
+}
+
+function setActiveTypeButton() {
+  typeButtons.forEach(btn => {
+    btn.classList.toggle("mood-pill-active", btn.dataset.type === currentType);
+  });
+}
+
+function artistTile(a) {
+  const el = document.createElement("a");
+  el.className = "browse-tile";
+  el.href = `/browse/artist/${a.rating_key}`;
+  el.innerHTML = `
+    <img class="browse-tile-art browse-tile-art-round" src="/art/${a.rating_key}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="browse-tile-title">${a.title}</div>
+  `;
+  return el;
+}
+
+function albumTile(a) {
+  const el = document.createElement("a");
+  el.className = "browse-tile";
+  el.href = `/browse/album/${a.rating_key}`;
+  const subtitle = [a.artist, a.year].filter(Boolean).join(" · ");
+  el.innerHTML = `
+    <img class="browse-tile-art" src="/art/${a.rating_key}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="browse-tile-title">${a.title}</div>
+    <div class="browse-tile-subtitle">${subtitle}</div>
+  `;
+  return el;
+}
+
+function removeSentinel() {
+  const s = document.getElementById("browse-sentinel");
+  if (s) s.remove();
+  if (observer) { observer.disconnect(); observer = null; }
+}
+
+function ensureSentinel() {
+  removeSentinel();
+  if (!hasMore) return;
+  const sentinel = document.createElement("div");
+  sentinel.id = "browse-sentinel";
+  sentinel.style.height = "1px";
+  gridEl.after(sentinel);
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && hasMore && !loading) loadPage();
+  }, { root: scrollEl, rootMargin: "300px" });
+  observer.observe(sentinel);
+}
+
+async function loadPage() {
+  if (loading || !hasMore) return;
+  loading = true;
+  const endpoint = currentType === "albums" ? "/browse/api/albums" : "/browse/api/artists";
+  let data;
+  try {
+    const res = await fetch(`${endpoint}?offset=${offset}&limit=${PAGE_SIZE}&sort=${currentSort}`);
+    data = await res.json();
+    if (data.error) throw new Error(data.error);
+  } catch (e) {
+    loading = false;
+    return;
+  }
+  const tileFn = currentType === "albums" ? albumTile : artistTile;
+  data.results.forEach(item => gridEl.appendChild(tileFn(item)));
+  hasMore = !!data.has_more;
+  offset = typeof data.next_offset === "number" ? data.next_offset : offset + data.results.length;
+  loading = false;
+  ensureSentinel();
+}
+
+function resetAndLoad() {
+  offset = 0;
+  hasMore = true;
+  gridEl.innerHTML = "";
+  removeSentinel();
+  scrollEl.scrollTop = 0;
+  backToTopBtn.hidden = true;
+  loadPage();
+}
+
+typeButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    if (btn.dataset.type === currentType) return;
+    currentType = btn.dataset.type;
+    populateSortOptions();
+    setActiveTypeButton();
+    updateUrl();
+    resetAndLoad();
+  });
+});
+
+sortSelect.addEventListener("change", () => {
+  currentSort = sortSelect.value;
+  updateUrl();
+  resetAndLoad();
+});
+
+scrollEl.addEventListener("scroll", () => {
+  backToTopBtn.hidden = scrollEl.scrollTop < 300;
+});
+backToTopBtn.addEventListener("click", () => scrollEl.scrollTo({ top: 0, behavior: "smooth" }));
+
+populateSortOptions();
+setActiveTypeButton();
+updateUrl();
+loadPage();
+</script>
+{% endblock %}

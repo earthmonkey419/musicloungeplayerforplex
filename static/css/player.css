@@ -158,6 +158,8 @@
   cursor: pointer;
 }
 .mood-pill:hover { background: var(--pl-red); color: #fff; }
+.mood-pill-active { background: var(--pl-teal); color: #FFF8E9; }
+.mood-pill-active:hover { background: var(--pl-teal); color: #FFF8E9; }
 .mood-instrumental-toggle { font-size: 13px; color: var(--pl-text-secondary); display: flex; align-items: center; gap: 6px; }
 
 .pl-btn {
@@ -565,3 +567,41 @@
 .pl-modal-new-row .pl-btn { padding: 10px 16px; font-size: 14px; }
 .site-footer { text-align: center; margin-top: 48px; padding: 20px 0; font-size: 13px; color: var(--ink-soft); }
 .ml-player-theme .site-footer { color: var(--pl-text-secondary); }
+
+/* --- Library browsing: Artists/Albums grid --- */
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--pl-space-md);
+  padding-bottom: var(--pl-space-md);
+}
+.browse-tile {
+  text-decoration: none;
+  color: var(--pl-text);
+  display: block;
+}
+.browse-tile-art {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--pl-radius-sm);
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border);
+}
+.browse-tile-art-round { border-radius: 50%; }
+.browse-tile-title {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-tile-subtitle {
+  font-size: 12px;
+  color: var(--pl-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browse-tile:hover .browse-tile-title { text-decoration: underline; }
