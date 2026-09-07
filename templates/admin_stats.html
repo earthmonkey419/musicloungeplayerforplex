@@ -9,6 +9,30 @@
 </div>
 
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
+  <div class="room-card-label">LAST.FM SCROBBLING</div>
+  {% if not lastfm_configured %}
+  <p style="color:var(--pl-text-secondary);">
+    Not set up yet — add <code>LASTFM_API_KEY</code> and
+    <code>LASTFM_API_SECRET</code> to config.py (get a key at
+    <a href="https://www.last.fm/api/account/create" target="_blank" rel="noopener">last.fm/api/account/create</a>),
+    then restart Player.
+  </p>
+  {% elif lastfm_authorized %}
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <p style="margin:0;">✅ Connected as <strong>{{ lastfm_username }}</strong></p>
+    <form method="post" action="{{ url_for('admin.lastfm_disconnect') }}" onsubmit="return confirm('Disconnect Last.fm scrobbling?');">
+      <button type="submit" class="btn-secondary" style="padding:8px 16px; font-size:13px;">Disconnect</button>
+    </form>
+  </div>
+  {% else %}
+  <p style="color:var(--pl-text-secondary); margin-bottom:12px;">
+    API key configured, but not connected to a Last.fm account yet.
+  </p>
+  <a href="{{ url_for('admin.lastfm_connect') }}" class="pl-btn pl-btn-primary">Connect Last.fm</a>
+  {% endif %}
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
     <div class="room-card-label" style="margin:0;">SHARE LINKS ({{ shares|length }})</div>
     <div style="display:flex; gap:8px;">

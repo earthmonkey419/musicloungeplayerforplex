@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 import db
 import plex_client
 import musicmind_bridge
+import lastfm_client
 from auth import admin_required
 
 bp = Blueprint("player", __name__)
@@ -18,7 +19,40 @@ def index():
         playlists=playlists,
         recent_plays=recent_plays,
         musicmind_available=musicmind_bridge.is_available(),
+        lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
     )
+
+
+@bp.route("/api/player/lastfm/now-playing", methods=["POST"])
+@admin_required
+def api_lastfm_now_playing():
+    body = request.get_json(silent=True) or {}
+    artist = body.get("artist")
+    title = body.get("title")
+    if not artist or not title:
+        return jsonify({"ok": False}), 200
+    try:
+        lastfm_client.update_now_playing(artist, title)
+        return jsonify({"ok": True})
+    except Exception as e:
+        current_app.logger.exception("Last.fm now-playing update failed for artist=%r title=%r", artist, title)
+        return jsonify({"ok": False, "error": str(e)}), 200
+
+
+@bp.route("/api/player/lastfm/scrobble", methods=["POST"])
+@admin_required
+def api_lastfm_scrobble():
+    body = request.get_json(silent=True) or {}
+    artist = body.get("artist")
+    title = body.get("title")
+    if not artist or not title:
+        return jsonify({"ok": False}), 200
+    try:
+        lastfm_client.scrobble(artist, title)
+        return jsonify({"ok": True})
+    except Exception as e:
+        current_app.logger.exception("Last.fm scrobble failed for artist=%r title=%r", artist, title)
+        return jsonify({"ok": False, "error": str(e)}), 200
 
 
 @bp.route("/api/player/log-play", methods=["POST"])

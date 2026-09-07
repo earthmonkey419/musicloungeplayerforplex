@@ -135,6 +135,7 @@ const nativePlaylists = {{ playlists | selectattr('source', 'equalto', 'native')
 <script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
 <script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
 <script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
+{% if lastfm_active %}<script src="{{ url_for('static', filename='js/lastfm-scrobble.js') }}"></script>{% endif %}
 <script>
 const resultsSection = document.getElementById("results-section");
 const defaultView = document.getElementById("default-view");

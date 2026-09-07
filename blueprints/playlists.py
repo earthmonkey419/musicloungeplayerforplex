@@ -3,12 +3,11 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 import db
 import plex_client
 import plex_export
+import lastfm_client
 from auth import admin_required
 
 bp = Blueprint("playlists", __name__)
 
-
-# --- Views --------------------------------------------------------------
 
 @bp.route("/")
 @admin_required
@@ -24,21 +23,20 @@ def view(playlist_id):
         return "Playlist not found.", 404
 
     if playlist["source"] == "plex_synced":
-        # Refresh-on-view, per scope doc -- always current with Plex,
-        # never a copy that silently drifts.
         try:
             _, _, tracks = plex_client.get_content_tracks("playlist", playlist["plex_ref"])
             db.replace_playlist_tracks(playlist_id, tracks)
         except Exception:
             current_app.logger.exception("Failed to refresh synced playlist id=%r", playlist_id)
-            # Fall through and show whatever we last cached -- degrade
-            # gracefully rather than a hard failure.
 
     tracks = db.get_playlist_tracks(playlist_id)
-    return render_template("playlist_detail.html", playlist=playlist, tracks=tracks)
+    return render_template(
+        "playlist_detail.html",
+        playlist=playlist,
+        tracks=tracks,
+        lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+    )
 
-
-# --- Native playlist CRUD (JSON API) -------------------------------------
 
 @bp.route("/api/create", methods=["POST"])
 @admin_required
@@ -110,7 +108,7 @@ def api_reorder(playlist_id):
         return jsonify({"error": "Can't reorder a Plex-synced playlist here -- reorder it in Plex."}), 400
 
     body = request.get_json(silent=True) or {}
-    ordered_refs = body.get("track_refs")  # list of rating_keys, new order
+    ordered_refs = body.get("track_refs")
     if not ordered_refs:
         return jsonify({"error": "Missing track_refs."}), 400
 
@@ -129,13 +127,9 @@ def api_reorder(playlist_id):
     return jsonify({"ok": True})
 
 
-# --- Plex-synced import ---------------------------------------------------
-
 @bp.route("/api/import-from-plex", methods=["POST"])
 @admin_required
 def api_import_from_plex():
-    """Creates a plex_synced playlist row pointing at an existing Plex
-    playlist, chosen from a search over plex_client.search_content('playlist', ...)."""
     body = request.get_json(silent=True) or {}
     plex_ref = body.get("plex_ref")
     name = body.get("name", "").strip()
@@ -148,12 +142,9 @@ def api_import_from_plex():
         db.replace_playlist_tracks(playlist_id, tracks)
     except Exception:
         current_app.logger.exception("Initial sync failed for imported playlist plex_ref=%r", plex_ref)
-        # Row still created -- next view will retry the refresh.
 
     return jsonify({"ok": True, "playlist_id": playlist_id})
 
-
-# --- Export to Plex --------------------------------------------------------
 
 @bp.route("/api/<int:playlist_id>/export", methods=["POST"])
 @admin_required

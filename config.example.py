@@ -74,3 +74,12 @@ SMTP_FROM_DISPLAY_NAME = os.environ.get("SMTP_FROM_DISPLAY_NAME", "MusicLounge P
 # at MusicMind's plex_music_brain.db (read-only; Player never writes
 # to it) to enable instrumental-only filtering enrichment.
 MUSICMIND_DB_PATH = os.environ.get("MUSICMIND_DB_PATH", "")
+
+# --- Optional: Last.fm scrobbling ---
+# Leave both blank to disable entirely. Get a key/secret at
+# https://www.last.fm/api/account/create -- these two values alone
+# don't authorize anything; the admin still has to connect their
+# Last.fm account once via Settings (a one-time browser approval
+# flow), which stores a permanent session key in the app's own DB.
+LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
+LASTFM_API_SECRET = os.environ.get("LASTFM_API_SECRET", "")

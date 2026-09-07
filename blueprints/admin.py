@@ -6,6 +6,7 @@ from datetime import datetime
 import qrcode
 import config
 import db
+import lastfm_client
 from auth import admin_required
 from email_utils import send_password_reset_email
 
@@ -97,7 +98,51 @@ def stats():
     ).fetchall()
 
     conn.close()
-    return render_template("admin_stats.html", shares=shares, rooms=rooms)
+    return render_template(
+        "admin_stats.html",
+        shares=shares,
+        rooms=rooms,
+        lastfm_configured=lastfm_client.is_configured(),
+        lastfm_authorized=lastfm_client.is_authorized(),
+        lastfm_username=lastfm_client.get_connected_username(),
+    )
+
+
+@bp.route("/lastfm/connect")
+@admin_required
+def lastfm_connect():
+    if not lastfm_client.is_configured():
+        return redirect(url_for("admin.stats"))
+    # request.host_url, not url_for(..., _external=True) -- this app
+    # sits behind a Cloudflare Tunnel, and _external=True depends on
+    # Flask correctly inferring the public hostname through that
+    # proxy, which isn't guaranteed. request.host_url is the same
+    # safer pattern already used for password-reset emails and join
+    # links elsewhere in this file.
+    callback_url = request.host_url.rstrip("/") + url_for("admin.lastfm_callback")
+    auth_url = lastfm_client.get_auth_url(callback_url)
+    return redirect(auth_url)
+
+
+@bp.route("/lastfm/callback")
+@admin_required
+def lastfm_callback():
+    token = request.args.get("token")
+    if not token:
+        return redirect(url_for("admin.stats"))
+    try:
+        lastfm_client.complete_auth(token)
+    except Exception:
+        current_app.logger.exception("Failed to complete Last.fm auth")
+    session.pop("lastfm_pending_token", None)
+    return redirect(url_for("admin.stats"))
+
+
+@bp.route("/lastfm/disconnect", methods=["POST"])
+@admin_required
+def lastfm_disconnect():
+    lastfm_client.disconnect()
+    return redirect(url_for("admin.stats"))
 
 
 @bp.route("/stats/download/<kind>")
