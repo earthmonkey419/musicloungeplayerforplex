@@ -253,9 +253,20 @@ def get_content_tracks(content_type, rating_key, limit=100):
 
 def track_art_path(rating_key):
     """Returns the Plex thumb `key` path (no token) for an item's cover
-    art."""
+    art. For tracks: prefers the album's cover via parentThumb over
+    the track's own, often-absent thumb.
+
+    For albums/artists/playlists: prefers the item's OWN thumb. An
+    earlier version of this function checked parentThumb first
+    regardless of item type, on the (wrong) assumption that only
+    tracks have a parentThumb -- an Album actually DOES have one too
+    (its parent is the Artist), so that unconditional check was
+    silently returning the ARTIST's photo instead of the album's own
+    cover for every album/artist/playlist lookup."""
     item = get_track(rating_key)
-    return getattr(item, "parentThumb", None) or getattr(item, "thumb", None)
+    if getattr(item, "type", None) == "track":
+        return getattr(item, "parentThumb", None) or getattr(item, "thumb", None)
+    return getattr(item, "thumb", None) or getattr(item, "parentThumb", None)
 
 
 def track_stream_part(rating_key):

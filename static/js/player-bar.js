@@ -22,10 +22,10 @@ window.MLPlayer = (function () {
   let endedListeners = [];
   let timeUpdateListeners = [];
 
-  function notifyChange() {
+  function notifyChange(isRehydration) {
     const current = getCurrent();
     changeListeners.forEach(cb => {
-      try { cb({ track: current ? current.track : null, index: queueIndex, isPaused: audioEl.paused }); }
+      try { cb({ track: current ? current.track : null, index: queueIndex, isPaused: audioEl.paused, isRehydration: !!isRehydration }); }
       catch (e) { console.error("MLPlayer onChange listener error:", e); }
     });
   }
@@ -196,7 +196,7 @@ window.MLPlayer = (function () {
     audioEl.src = `/stream/${track.rating_key}`;
     renderNowPlaying(track, false);
     updateNavButtons();
-    notifyChange();
+    notifyChange(true);
   }
 
   npPlayPause.addEventListener("click", () => {
