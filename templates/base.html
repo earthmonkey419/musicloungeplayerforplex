@@ -19,9 +19,28 @@
 <body class="{% block body_class %}{% endblock %}">
   <img class="bg-jukebox" src="{{ url_for('static', filename='img/background.svg') }}" alt="" aria-hidden="true">
   {% block topbar %}{% endblock %}
-  <div class="wrap">
-    {% block content %}{% endblock %}
+
+  {% if needs_audio_bar or player_family %}
+  {% include "partials/_now_playing_bar.html" %}
+  <script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
+  {% endif %}
+
+  {% if player_family %}
+  <script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
+  {% if lastfm_active %}<script src="{{ url_for('static', filename='js/lastfm-scrobble.js') }}"></script>{% endif %}
+  {% endif %}
+
+  <div class="wrap{% if needs_audio_bar or player_family %} wrap-has-player-bar{% endif %}">
+    <div id="spa-content">
+      {% block content %}{% endblock %}
+    </div>
     {% include "partials/_footer.html" %}
   </div>
+
+  {% if player_family %}
+  <script src="{{ url_for('static', filename='js/spa-nav.js') }}"></script>
+  {% endif %}
 </body>
 </html>

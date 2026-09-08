@@ -16,7 +16,7 @@ def _lastfm_active():
 @bp.route("/")
 @admin_required
 def artists():
-    return render_template("browse_index.html", lastfm_active=_lastfm_active())
+    return render_template("browse_index.html", lastfm_active=_lastfm_active(), player_family=True)
 
 
 @bp.route("/api/artists")
@@ -59,6 +59,7 @@ def artist_detail(rating_key):
         albums=albums,
         rating_key=rating_key,
         lastfm_active=_lastfm_active(),
+        player_family=True,
     )
 
 
@@ -79,4 +80,5 @@ def album_detail(rating_key):
         rating_key=rating_key,
         playlists_for_modal=native_playlists,
         lastfm_active=_lastfm_active(),
+        player_family=True,
     )

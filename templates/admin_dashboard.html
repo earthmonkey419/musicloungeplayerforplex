@@ -78,10 +78,6 @@
   </div>
 </div>
 
-{% set hide_bar_ui = true %}
-{% include "partials/_now_playing_bar.html" %}
-<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
-
 <script>
 const JOIN_URL = {{ join_url|tojson }};
 let currentTrackRef = {{ room["now_playing_ref"]|tojson }};
@@ -164,7 +160,7 @@ function refreshState() {
       }
       const list = document.getElementById("queue-list");
       if (state.queue.length === 0) {
-        list.innerHTML = '<li class="empty">Queue\'s empty — send guests to the join link below.</li>';
+        list.innerHTML = '<li class="empty">Queue\\'s empty — send guests to the join link below.</li>';
       } else {
         list.innerHTML = state.queue.map((item, i) => `
           <li class="track-row">

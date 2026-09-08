@@ -50,14 +50,14 @@
       <div class="pl-card-icon">👥</div>
       <h3>Start a Room</h3>
       <p>Bring others in — shared queue, one now-playing, everyone joins by code.</p>
-      <a href="{{ url_for('admin.dashboard') }}" class="pl-btn pl-btn-dark">Start a Room →</a>
+      <a href="{{ url_for('admin.dashboard') }}" class="pl-btn pl-btn-dark" data-full-reload>Start a Room →</a>
     </div>
 
     <div class="pl-card pl-card-mint">
       <div class="pl-card-icon">🎁</div>
       <h3>Share Some Music</h3>
       <p>Send an album, artist, or playlist as a private link.</p>
-      <a href="{{ url_for('share.new_share') }}" class="pl-btn pl-btn-dark">Create a Link →</a>
+      <a href="{{ url_for('share.new_share') }}" class="pl-btn pl-btn-dark" data-full-reload>Create a Link →</a>
     </div>
 
     <div class="pl-card pl-card-neutral pl-card-playlists">
@@ -108,8 +108,6 @@
   </section>
 </section>
 
-{% include "partials/_now_playing_bar.html" %}
-
 <div id="add-to-playlist-modal" class="pl-modal-overlay" hidden>
   <div class="pl-modal">
     <div class="pl-modal-header">
@@ -131,11 +129,6 @@
 const nativePlaylists = {{ playlists | selectattr('source', 'equalto', 'native') | list | tojson }};
 </script>
 
-<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
-<script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
-<script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
-<script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
-{% if lastfm_active %}<script src="{{ url_for('static', filename='js/lastfm-scrobble.js') }}"></script>{% endif %}
 <script>
 const resultsSection = document.getElementById("results-section");
 const defaultView = document.getElementById("default-view");
@@ -396,12 +389,6 @@ document.getElementById("search-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") runSearch();
 });
 
-document.querySelectorAll(".js-focus-search").forEach(link => {
-  link.addEventListener("click", () => {
-    setTimeout(() => document.getElementById("search-input").focus(), 50);
-  });
-});
-
 document.querySelectorAll(".mood-pill").forEach(btn => {
   btn.addEventListener("click", () => {
     const instrumentalOnlyEl = document.getElementById("instrumental-only");
@@ -440,6 +427,10 @@ document.querySelectorAll("#default-view .pl-recently-played .track-row").forEac
     MLPlayer.enqueue(tracks[i]);
   });
 });
+
+window.__spaTeardown = function () {
+  removeSentinel();
+};
 </script>
 
 {% endblock %}

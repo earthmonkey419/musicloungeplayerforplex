@@ -12,7 +12,7 @@ bp = Blueprint("playlists", __name__)
 @bp.route("/")
 @admin_required
 def index():
-    return render_template("playlists.html", playlists=db.list_playlists())
+    return render_template("playlists.html", playlists=db.list_playlists(), player_family=True)
 
 
 @bp.route("/<int:playlist_id>")
@@ -35,6 +35,7 @@ def view(playlist_id):
         playlist=playlist,
         tracks=tracks,
         lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        player_family=True,
     )
 
 

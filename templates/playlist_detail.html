@@ -44,13 +44,6 @@
 </div>
 {% endif %}
 
-{% include "partials/_now_playing_bar.html" %}
-
-<script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
-<script src="{{ url_for('static', filename='js/play-history.js') }}"></script>
-<script src="{{ url_for('static', filename='js/player-queue-sync.js') }}"></script>
-<script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
-{% if lastfm_active %}<script src="{{ url_for('static', filename='js/lastfm-scrobble.js') }}"></script>{% endif %}
 <script>
 const PLAYLIST_SOURCE = {{ playlist['source']|tojson }};
 

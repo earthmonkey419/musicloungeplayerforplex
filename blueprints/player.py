@@ -20,6 +20,7 @@ def index():
         recent_plays=recent_plays,
         musicmind_available=musicmind_bridge.is_available(),
         lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        player_family=True,
     )
 
 

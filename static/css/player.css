@@ -70,6 +70,7 @@
   font-weight: 500;
 }
 .pl-topnav-link:hover { opacity: 1; text-decoration: underline; }
+.pl-topnav-link-active { opacity: 1; text-decoration: underline; font-weight: 700; }
 .pl-topnav-logout {
   color: #FFF8E9;
   opacity: 0.7;
@@ -268,6 +269,7 @@
 }
 .pl-back-to-top:hover { filter: brightness(1.2); }
 .pl-back-to-top[hidden] { display: none; }
+.wrap-has-player-bar { padding-bottom: 96px; }
 
 .track-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--pl-space-xs); }
 .track-row {
@@ -338,7 +340,9 @@
 .btn-secondary:hover { background: var(--pl-surface); }
 
 .now-playing-bar {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 5;
   display: flex;
@@ -348,7 +352,6 @@
   color: #FFF8E9;
   padding: 12px var(--pl-space-lg);
   border-radius: var(--pl-radius-md) var(--pl-radius-md) 0 0;
-  margin-top: var(--pl-space-lg);
 }
 .now-playing-bar[hidden] { display: none; }
 .now-playing-bar-page-hidden { display: none !important; }
