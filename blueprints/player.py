@@ -24,6 +24,16 @@ def index():
     )
 
 
+@bp.route("/help")
+@admin_required
+def help_page():
+    return render_template(
+        "help.html",
+        lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        player_family=True,
+    )
+
+
 @bp.route("/api/player/lastfm/now-playing", methods=["POST"])
 @admin_required
 def api_lastfm_now_playing():

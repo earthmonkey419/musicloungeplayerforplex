@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Help — MusicLounge Player{% endblock %}
+{% block body_class %}ml-player-theme{% endblock %}
+{% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
+{% block content %}
+
+<div class="pl-hero" style="padding: var(--pl-space-lg); margin-top: var(--pl-space-lg);">
+  <h1 style="font-size:32px; line-height:40px; margin-bottom:8px;">Help</h1>
+  <p style="color:var(--pl-text-secondary); margin:0;">A quick guide to everything MusicLounge Player can do.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
+  <div class="room-card-label">ON THIS PAGE</div>
+  <div style="display:flex; flex-wrap:wrap; gap: 8px 20px; margin-top: 8px;">
+    <a href="#help-search" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Search</a>
+    <a href="#help-browse" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Browse</a>
+    <a href="#help-playlists" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Playlists</a>
+    <a href="#help-queue" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Queue &amp; Now Playing</a>
+    <a href="#help-room" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Room Mode</a>
+    <a href="#help-share" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Share Mode</a>
+    <a href="#help-lastfm" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Last.fm scrobbling</a>
+    <a href="#help-pwa" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Install as an app</a>
+  </div>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-search">
+  <div class="room-card-label">SEARCH</div>
+  <p>Type into the search bar on the Player home page to search your whole library as you type. Results load a page at a time as you scroll, so searching a large library stays fast.</p>
+  <p>Below the search bar, the genre pills (Funk, Soul, Jazz, and so on) work as one-tap mood browsing — no typing needed. If your library is connected to MusicMind, you'll also see an "Instrumental only" toggle for filtering out vocal tracks within a mood.</p>
+  <p>On any result, track, or playlist row: <strong>▶</strong> plays it now, <strong>⏬</strong> adds it to your queue without interrupting what's currently playing, and <strong>+</strong> adds it to a playlist.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-browse">
+  <div class="room-card-label">BROWSE</div>
+  <p>The Browse tab is for exploring your library by structure rather than searching for something specific. Toggle between <strong>Artists</strong> and <strong>Albums</strong>, and sort either one (name, recently added, and for albums, also by artist or year).</p>
+  <p>Tap an artist to see their albums, newest first. Tap an album — from either the artist page or directly from the Albums view — to see its full tracklist with the same play/queue/playlist actions as search results, plus a <strong>Play Album</strong> button to queue up the whole thing in track order.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-playlists">
+  <div class="room-card-label">PLAYLISTS</div>
+  <p>Playlists come in two kinds:</p>
+  <p><strong>Native playlists</strong> live entirely in MusicLounge Player. Build them by adding tracks from search or Browse, reorder them by dragging, and remove tracks any time. When you're happy with one, <strong>Export to Plex</strong> creates a matching playlist in your actual Plex library (named with a <code>MusicLounge-</code> prefix, so it's always obvious which playlists came from here).</p>
+  <p><strong>Plex-synced playlists</strong> are existing playlists already in your Plex library, imported for convenient access here. These stay read-only and always refresh to match Plex when you view them — edit the original in Plex if you want to change what's in it.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-queue">
+  <div class="room-card-label">QUEUE &amp; NOW PLAYING</div>
+  <p>Your queue persists — it survives page reloads and navigating around the app, so you never lose your place. Tap the <strong>☰</strong> button in the player bar to see the full queue: tap any track to jump to it, drag to reorder, or remove tracks you don't want anymore.</p>
+  <p>Tap the album art or track title/artist in the player bar (not the buttons) to open the <strong>expanded Now Playing view</strong> — large art, a real progress bar you can drag to seek to any point in the track, and full transport controls.</p>
+  <p>Playback itself doesn't stop when you navigate between Player, Browse, and Playlists — it's one continuous listening session across all three.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-room">
+  <div class="room-card-label">ROOM MODE</div>
+  <p>Room Mode turns MusicLounge Player into a shared jukebox. Start a room from the Player home page, and you'll get a join code and QR code to share — anyone who joins adds to one shared queue, and everyone sees the same now-playing track, no account needed on their end.</p>
+  <p>Audio plays through <em>your</em> device (whoever started the room) — guests are choosing what plays, not streaming it themselves. This makes it well suited for an actual shared space: a party, an office, a car full of people passing a phone around.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-share">
+  <div class="room-card-label">SHARE MODE</div>
+  <p>Share Mode creates a private, time-limited link to a track, album, artist, or playlist — for sending to one specific person rather than hosting a live session. Pick how long the link should stay valid, then copy it or (if SMTP is configured) email it directly.</p>
+  <p>Whoever opens the link gets their own simple player for that content — it plays on <em>their</em> device, and doesn't touch your own queue or listening history.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-lastfm">
+  <div class="room-card-label">LAST.FM SCROBBLING</div>
+  <p>If your instance has Last.fm configured, connect your account once from <a href="{{ url_for('admin.stats') }}" data-full-reload>Settings</a>. After that, tracks you listen to in Player, Playlists, or Browse show up as "now playing" and get scrobbled automatically once you've genuinely listened to enough of them — Last.fm's own rule, not something skipped tracks trigger.</p>
+  <p>Room Mode and Share Mode plays are never scrobbled, even when connected — those aren't necessarily your own personal listening.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-pwa">
+  <div class="room-card-label">INSTALL AS AN APP</div>
+  <p>MusicLounge Player can be added to your phone's home screen for a real app-like experience — its own icon, and no browser address bar when you open it.</p>
+  <p><strong>iOS (Safari):</strong> tap the Share button, then "Add to Home Screen."</p>
+  <p><strong>Android (Chrome):</strong> tap the menu (⋮), then "Add to Home Screen" or "Install app."</p>
+</div>
+
+{% endblock %}
