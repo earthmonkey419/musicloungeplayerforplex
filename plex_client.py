@@ -345,3 +345,14 @@ def get_album_detail(rating_key):
     album = get_plex().fetchItem(int(rating_key))
     tracks = album.tracks()
     return album.title, album.parentTitle, [_track_to_dict(t) for t in tracks]
+
+
+def list_all_tracks():
+    """All tracks in the library, for the Tracks browse view -- the
+    live-Plex fallback when MusicMind isn't available (see
+    musicmind_bridge.browse_tracks_page for the preferred fast path).
+    Uses section.searchTracks() with no filter, the same proven
+    pattern as list_all_artists()."""
+    section = get_music_section()
+    tracks = section.searchTracks()
+    return [_track_to_dict(t) for t in tracks]

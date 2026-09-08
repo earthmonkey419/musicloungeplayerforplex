@@ -10,6 +10,7 @@
     <div class="pl-chip-row" style="margin:0;">
       <button class="mood-pill browse-type-btn" data-type="artists">Artists</button>
       <button class="mood-pill browse-type-btn" data-type="albums">Albums</button>
+      <button class="mood-pill browse-type-btn" data-type="tracks">Tracks</button>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
       <label class="pl-caption" for="sort-select">Sort by</label>
@@ -25,8 +26,25 @@
   <button id="browse-back-to-top" class="pl-back-to-top" hidden title="Back to top">↑ Top</button>
 </div>
 
+<div id="add-to-playlist-modal" class="pl-modal-overlay" hidden>
+  <div class="pl-modal">
+    <div class="pl-modal-header">
+      <h3>Add to playlist</h3>
+      <button id="atp-close" class="pl-link-btn" title="Close">✕</button>
+    </div>
+    <p id="atp-track-label" class="pl-small" style="margin: 0 0 var(--pl-space-sm);"></p>
+    <ul id="atp-playlist-list" class="pl-modal-playlist-list"></ul>
+    <div class="pl-modal-new-row">
+      <input id="atp-new-name" type="text" placeholder="Or create a new playlist…">
+      <button id="atp-new-btn" class="pl-btn pl-btn-mint">Create &amp; Add</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
+const nativePlaylists = {{ playlists_for_modal | tojson }};
+
 const SORT_OPTIONS = {
   artists: [
     { value: "title", label: "Name (A–Z)" },
@@ -38,22 +56,34 @@ const SORT_OPTIONS = {
     { value: "year", label: "Year (Newest)" },
     { value: "added", label: "Recently Added" },
   ],
+  tracks: [
+    { value: "title", label: "Title (A–Z)" },
+    { value: "artist", label: "Artist (A–Z)" },
+    { value: "album", label: "Album (A–Z)" },
+  ],
 };
 
 const PAGE_SIZE = 48;
 const params = new URLSearchParams(window.location.search);
-let currentType = params.get("type") === "albums" ? "albums" : "artists";
+let currentType = ["albums", "tracks"].includes(params.get("type")) ? params.get("type") : "artists";
 let currentSort = params.get("sort") || "title";
 let offset = 0;
 let hasMore = true;
 let loading = false;
 let observer = null;
+let allLoadedTracks = []; // only populated/used when currentType === "tracks"
 
 const scrollEl = document.getElementById("browse-scroll");
 const gridEl = document.getElementById("browse-grid");
 const backToTopBtn = document.getElementById("browse-back-to-top");
 const sortSelect = document.getElementById("sort-select");
 const typeButtons = document.querySelectorAll(".browse-type-btn");
+
+const atpModal = document.getElementById("add-to-playlist-modal");
+const atpTrackLabel = document.getElementById("atp-track-label");
+const atpPlaylistList = document.getElementById("atp-playlist-list");
+const atpNewName = document.getElementById("atp-new-name");
+let atpCurrentTrack = null;
 
 function updateUrl() {
   const p = new URLSearchParams();
@@ -107,6 +137,27 @@ function albumTile(a) {
   return el;
 }
 
+function trackRow(t, indexInAllLoaded) {
+  const li = document.createElement("li");
+  li.className = "track-row";
+  li.innerHTML = `
+    <img class="track-art" src="/art/${t.rating_key}" alt="">
+    <div class="track-meta">
+      <div class="track-title">${t.title}</div>
+      <div class="track-artist">${t.artist}</div>
+    </div>
+    <button class="track-play" title="Play">▶</button>
+    <button class="track-enqueue" title="Add to queue">⏬</button>
+    <button class="track-add" title="Add to playlist">+</button>
+  `;
+  li.querySelector(".track-play").addEventListener("click", () => {
+    MLPlayer.playQueue(allLoadedTracks, indexInAllLoaded);
+  });
+  li.querySelector(".track-enqueue").addEventListener("click", () => MLPlayer.enqueue(t));
+  li.querySelector(".track-add").addEventListener("click", () => openAddToPlaylist(t));
+  return li;
+}
+
 function removeSentinel() {
   const s = document.getElementById("browse-sentinel");
   if (s) s.remove();
@@ -129,7 +180,7 @@ function ensureSentinel() {
 async function loadPage() {
   if (loading || !hasMore) return;
   loading = true;
-  const endpoint = currentType === "albums" ? "/browse/api/albums" : "/browse/api/artists";
+  const endpoint = { artists: "/browse/api/artists", albums: "/browse/api/albums", tracks: "/browse/api/tracks" }[currentType];
   let data;
   try {
     const res = await fetch(`${endpoint}?offset=${offset}&limit=${PAGE_SIZE}&sort=${currentSort}`);
@@ -139,8 +190,15 @@ async function loadPage() {
     loading = false;
     return;
   }
-  const tileFn = currentType === "albums" ? albumTile : artistTile;
-  data.results.forEach(item => gridEl.appendChild(tileFn(item)));
+  if (currentType === "tracks") {
+    data.results.forEach(t => {
+      allLoadedTracks.push(t);
+      gridEl.appendChild(trackRow(t, allLoadedTracks.length - 1));
+    });
+  } else {
+    const tileFn = currentType === "albums" ? albumTile : artistTile;
+    data.results.forEach(item => gridEl.appendChild(tileFn(item)));
+  }
   hasMore = !!data.has_more;
   offset = typeof data.next_offset === "number" ? data.next_offset : offset + data.results.length;
   loading = false;
@@ -150,12 +208,73 @@ async function loadPage() {
 function resetAndLoad() {
   offset = 0;
   hasMore = true;
+  allLoadedTracks = [];
+  gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
   gridEl.innerHTML = "";
   removeSentinel();
   scrollEl.scrollTop = 0;
   backToTopBtn.hidden = true;
   loadPage();
 }
+
+function openAddToPlaylist(track) {
+  atpCurrentTrack = track;
+  atpTrackLabel.textContent = `"${track.title}" — ${track.artist}`;
+  atpNewName.value = "";
+  renderPlaylistPickerList();
+  atpModal.hidden = false;
+}
+function closeAddToPlaylist() { atpModal.hidden = true; atpCurrentTrack = null; }
+
+function renderPlaylistPickerList() {
+  atpPlaylistList.innerHTML = "";
+  if (!nativePlaylists.length) {
+    atpPlaylistList.innerHTML = '<li class="empty">No playlists yet -- create one below.</li>';
+    return;
+  }
+  nativePlaylists.forEach(p => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.className = "pl-modal-playlist-btn";
+    btn.textContent = p.name;
+    btn.addEventListener("click", () => addTrackToPlaylist(p.id, p.name));
+    li.appendChild(btn);
+    atpPlaylistList.appendChild(li);
+  });
+}
+
+function addTrackToPlaylist(playlistId, playlistName) {
+  fetch(`/playlists/api/${playlistId}/add-track`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({rating_key: atpCurrentTrack.rating_key}),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) closeAddToPlaylist();
+      else alert(data.error || "Couldn't add that track.");
+    })
+    .catch(() => alert("Something went wrong adding that track."));
+}
+
+document.getElementById("atp-close").addEventListener("click", closeAddToPlaylist);
+atpModal.addEventListener("click", (e) => { if (e.target === atpModal) closeAddToPlaylist(); });
+
+document.getElementById("atp-new-btn").addEventListener("click", () => {
+  const name = atpNewName.value.trim();
+  if (!name) return;
+  fetch("{{ url_for('playlists.api_create') }}", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name}),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) { alert(data.error || "Couldn't create playlist."); return; }
+      nativePlaylists.push({id: data.playlist_id, name: name, source: "native"});
+      addTrackToPlaylist(data.playlist_id, name);
+    });
+});
 
 typeButtons.forEach(btn => {
   btn.addEventListener("click", () => {
@@ -181,9 +300,12 @@ backToTopBtn.addEventListener("click", () => scrollEl.scrollTo({ top: 0, behavio
 
 populateSortOptions();
 setActiveTypeButton();
+gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
 updateUrl();
 loadPage();
 
+// SPA-nav teardown -- disconnects the IntersectionObserver before
+// this page's content is swapped out.
 window.__spaTeardown = function () {
   removeSentinel();
 };

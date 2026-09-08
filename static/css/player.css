@@ -665,18 +665,6 @@
   position: relative;
 }
 
-.npx-close-btn {
-  position: absolute;
-  top: -8px;
-  right: 0;
-  border: none;
-  background: none;
-  color: #FFF8E9;
-  cursor: pointer;
-  padding: 8px;
-}
-.npx-close-btn svg { width: 24px; height: 24px; display: block; }
-
 .npx-art {
   width: min(320px, 70vw);
   height: min(320px, 70vw);

@@ -16,7 +16,6 @@
   const trigger = document.getElementById("np-expand-trigger");
   if (!overlay || !trigger) return;
 
-  const closeBtn = document.getElementById("npx-close");
   const art = document.getElementById("npx-art");
   const title = document.getElementById("npx-title");
   const artist = document.getElementById("npx-artist");
@@ -59,7 +58,6 @@
   }
 
   trigger.addEventListener("click", open);
-  closeBtn.addEventListener("click", close);
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
 
   MLPlayer.onChange(({ track, isPaused }) => {

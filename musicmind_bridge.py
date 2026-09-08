@@ -165,3 +165,57 @@ def _filter_instrumental(tracks):
     except Exception:
         return tracks
     return [t for t in tracks if str(t["rating_key"]) in instrumental_keys]
+
+
+# --- Track browsing --------------------------------------------------------
+
+def _all_tracks_from_musicmind():
+    """Fast path: every track directly from MusicMind's own table, no
+    filter. Only selects columns already proven to exist elsewhere in
+    this file (rating_key/title/artist/album/duration_ms) -- no
+    assumption about an added_at-style column that's never actually
+    been queried anywhere in this codebase."""
+    conn = _connect()
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT rating_key, title, artist, album, duration_ms FROM tracks"
+        ).fetchall()
+    finally:
+        conn.close()
+    return [d for d in (_row_to_track_dict(r) for r in rows) if d]
+
+
+def _build_track_browse_pool():
+    """Prefer MusicMind (a local SQLite table scan, fast even for a
+    large library), fall back to live Plex on any failure or if
+    MusicMind isn't configured."""
+    if is_available():
+        try:
+            pool = _all_tracks_from_musicmind()
+            if pool:
+                return pool
+        except Exception:
+            pass
+    return plex_client.list_all_tracks()
+
+
+_TRACK_SORTS = {
+    "title": lambda t: t["title"].lower(),
+    "artist": lambda t: (t["artist"].lower(), t["title"].lower()),
+    "album": lambda t: (t["album"].lower(), t["title"].lower()),
+}
+
+
+def browse_tracks_page(offset=0, limit=48, sort="title"):
+    """Cached, paginated, sorted track browse. One cached pool serves
+    every sort order (sorting an already-fetched in-memory list is
+    cheap), same pattern as library_browse.py's artist/album pools."""
+    cache_key = ("browse_tracks",)
+    pool = result_cache.cache_get(cache_key)
+    if pool is None:
+        pool = _build_track_browse_pool()
+        result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
+    sort_key = _TRACK_SORTS.get(sort, _TRACK_SORTS["title"])
+    sorted_pool = sorted(pool, key=sort_key)
+    return result_cache.paged(sorted_pool, offset, limit)
