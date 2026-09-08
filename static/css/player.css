@@ -357,23 +357,10 @@
 .now-playing-bar[hidden] { display: none; }
 .now-playing-bar-page-hidden { display: none !important; }
 
-@media (max-width: 600px) {
-  .now-playing-bar {
-    padding: 10px 14px;
-    gap: 8px;
-  }
-  .np-art { width: 32px; height: 32px; }
-  .np-info { flex: 1 1 auto; min-width: 40px; }
-  .np-controls { gap: 6px; }
-  .np-btn-nav, .np-btn-disabled {
-    width: 26px;
-    height: 26px;
-  }
-  .np-btn-nav .np-icon, .np-btn-disabled .np-icon { width: 15px; height: 15px; }
-  .np-btn-play { width: 32px; height: 32px; }
-  .np-btn-play .np-icon { width: 16px; height: 16px; }
-  .np-volume-wrap { display: none; }
-}
+/* Mobile now-playing bar overrides moved to the very end of this file
+   -- see the bottom of the stylesheet for why, and don't add new
+   base-level .np-* / .now-playing-bar rules without checking they
+   don't need to move too. */
 .np-art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; }
 .np-expand-trigger {
   display: flex;
@@ -769,3 +756,34 @@
 .npx-btn-play.is-playing .icon-pause { display: block; }
 .npx-icon { width: 26px; height: 26px; display: block; }
 .npx-btn-play .npx-icon { width: 28px; height: 28px; }
+/* --- Mobile now-playing bar overrides (must stay LAST in this file) ---
+   Every selector below also has a desktop base rule earlier in this
+   file. CSS cascade order for equal-specificity selectors is decided
+   by DOCUMENT ORDER, not by which one is inside a @media block -- a
+   later, unconditional base rule silently wins over an earlier
+   conditional one on a matching viewport. That's exactly what
+   happened here: this block used to live mid-file, and a subsequent
+   edit (the SVG icon redesign) added conflicting width/height/display
+   declarations for these same selectors AFTER it, silently reverting
+   every one of these mobile overrides back to desktop sizing --
+   caught only because the volume slider reappearing was visually
+   obvious; the art/button sizing likely reverted too, just less
+   noticeably. Keeping this block last guarantees it always wins
+   regardless of what gets added elsewhere later. */
+@media (max-width: 600px) {
+  .now-playing-bar {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .np-art { width: 32px; height: 32px; }
+  .np-info { flex: 1 1 auto; min-width: 40px; }
+  .np-controls { gap: 6px; }
+  .np-btn-nav, .np-btn-disabled {
+    width: 26px;
+    height: 26px;
+  }
+  .np-btn-nav .np-icon, .np-btn-disabled .np-icon { width: 15px; height: 15px; }
+  .np-btn-play { width: 32px; height: 32px; }
+  .np-btn-play .np-icon { width: 16px; height: 16px; }
+  .np-volume-wrap { display: none; }
+}
