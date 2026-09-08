@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/og-image.jpg" alt="MusicLounge Player" width="480">
+  <img src="static/og-image.jpg" alt="MusicLounge Player" width="630">
 </p>
 
 <h1 align="center">MusicLounge Player</h1>
