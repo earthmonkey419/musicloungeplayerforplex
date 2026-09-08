@@ -241,6 +241,11 @@ window.MLPlayer = (function () {
   function resume() { audioEl.play().catch(() => {}); npPlayPause.classList.add("is-playing"); notifyChange(); }
   function isPaused() { return audioEl.paused; }
 
+  function seekTo(seconds) {
+    if (!audioEl.duration || isNaN(audioEl.duration)) return;
+    audioEl.currentTime = Math.max(0, Math.min(seconds, audioEl.duration));
+  }
+
   function attemptAutoplay(track, onBlocked) {
     if (getCurrent() && getCurrent().track.rating_key === track.rating_key) {
       const p = audioEl.play();
@@ -270,7 +275,7 @@ window.MLPlayer = (function () {
   }
 
   return {
-    playTrack, playQueue, enqueue, pause, resume, isPaused,
+    playTrack, playQueue, enqueue, pause, resume, isPaused, seekTo,
     getCurrent, getQueue, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
     jumpTo, removeFromQueue, reorderQueue,
     onChange, onEnded, onTimeUpdate, attemptAutoplay,

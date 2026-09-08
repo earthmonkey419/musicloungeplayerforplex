@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   mlplayer:
     build: .
@@ -7,25 +5,25 @@ services:
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-8680}:8680"
+    env_file:
+      - .env
     environment:
-      - PLEX_URL=http://10.0.0.251:32400
-      - PLEX_TOKEN=REPLACE_ME
-      - MUSIC_LIB=Music
-      - ADMIN_PASSWORD=REPLACE_ME
-      - SECRET_KEY=REPLACE_ME_RANDOM
-      - COOKIE_SECURE=true
+      # Internal container wiring, not a secret -- always matches the
+      # volume mount below. Kept separate from .env, which is for
+      # per-deployment secrets/preferences (see .env.example).
       - DB_PATH=/app/data/mlplayer.db
-      - SMTP_HOST=REPLACE_ME
-      - SMTP_PORT=587
-      - SMTP_USERNAME=REPLACE_ME
-      - SMTP_PASSWORD=REPLACE_ME
-      - SMTP_FROM_ADDRESS=REPLACE_ME
-      - SMTP_FROM_DISPLAY_NAME=MusicLounge Player
-      # Optional -- leave unset to disable, no degraded functionality
-      - MUSICMIND_DB_PATH=
     volumes:
       - mlplayer-data:/app/data
+      # Alternative to the env-var-based config entirely: mount a
+      # real config.py directly instead. If you use this, the .env
+      # file above becomes unnecessary (config.py wins either way,
+      # since it's read directly rather than through the
+      # REPLACE_ME-default template).
       # - ./config.py:/app/config.py:ro
+      #
+      # Only needed if MUSICMIND_DB_PATH is set in .env -- mount
+      # MusicMind's plex_music_brain.db read-only at that same path.
+      # - /path/on/host/plex_music_brain.db:/app/data/plex_music_brain.db:ro
 
 volumes:
   mlplayer-data:

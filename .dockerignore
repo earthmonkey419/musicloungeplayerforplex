@@ -1,0 +1,23 @@
+# Never let a real config.py (real secrets) or a real database into
+# the build context -- Docker doesn't respect .gitignore on its own,
+# this file is what actually protects the image. Belt-and-suspenders
+# alongside the Dockerfile's own `rm -f config.py` before rebuilding
+# it from the template.
+config.py
+*.db
+.env
+
+.git
+.gitignore
+__pycache__
+*.pyc
+.venv
+venv
+.DS_Store
+*.log
+@eaDir/
+node_modules
+
+# Session transcripts / docs -- not needed at runtime, no reason to
+# ship them in the image.
+*.md
