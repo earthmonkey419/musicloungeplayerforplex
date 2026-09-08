@@ -3,6 +3,8 @@ from flask import Blueprint, render_template, request, jsonify, url_for, current
 import config
 import db
 import plex_client
+import lastfm_client
+import result_cache
 from email_utils import send_share_email
 
 bp = Blueprint("share", __name__)
@@ -11,7 +13,12 @@ bp = Blueprint("share", __name__)
 @bp.route("/", methods=["GET"])
 def new_share():
     # Three-stage flow: what are you sharing / choose it / how long.
-    return render_template("share_new.html", durations=config.SHARE_LINK_DURATIONS_HOURS)
+    return render_template(
+        "share_new.html",
+        durations=config.SHARE_LINK_DURATIONS_HOURS,
+        lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        player_family=True,
+    )
 
 
 @bp.route("/api/search")
@@ -20,8 +27,22 @@ def api_share_search():
     q = request.args.get("q", "").strip()
     if not q or content_type not in ("album", "artist", "playlist", "track"):
         return jsonify([])
+
+    # Previously uncached -- unlike Player's own search, every keystroke
+    # here walked live Plex fresh every time (for album/artist/playlist,
+    # that means fetching and filtering the WHOLE list client-side, no
+    # server-side substring support -- see search_content()'s own
+    # comments). Short TTL since a fresh share should reflect a just-
+    # renamed playlist reasonably quickly, but still real benefit for
+    # rapid re-typing of similar prefixes.
+    cache_key = ("share_search", content_type, q.lower())
+    cached = result_cache.cache_get(cache_key)
+    if cached is not None:
+        return jsonify(cached)
     try:
-        return jsonify(plex_client.search_content(content_type, q))
+        results = plex_client.search_content(content_type, q)
+        result_cache.cache_set(cache_key, results, ttl=120)
+        return jsonify(results)
     except Exception:
         current_app.logger.exception("Share search failed type=%r q=%r", content_type, q)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
@@ -43,10 +64,6 @@ def create_share():
     if not content_ref:
         return jsonify({"error": "Pick something to share first."}), 400
 
-    # Validate the content actually resolves in Plex, AND that it's
-    # genuinely the type claimed — closes the loop on the same class of
-    # bug search_content() guards against (a mismatched item type
-    # slipping through).
     try:
         item = plex_client.get_plex().fetchItem(int(content_ref))
     except Exception:

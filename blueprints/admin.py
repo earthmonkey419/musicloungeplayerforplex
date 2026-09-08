@@ -105,6 +105,8 @@ def stats():
         lastfm_configured=lastfm_client.is_configured(),
         lastfm_authorized=lastfm_client.is_authorized(),
         lastfm_username=lastfm_client.get_connected_username(),
+        lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        player_family=True,
     )
 
 

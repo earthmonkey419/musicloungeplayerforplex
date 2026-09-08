@@ -70,11 +70,13 @@
 </div>
 
 <script>
+(function () {
 let selectedType = null;
-let selectedContent = null;
+let selectedContent = null;  // {content_ref, title, subtitle}
 let selectedDuration = null;
 let currentShareUrl = null;
 let currentShareToken = null;
+let searchRequestId = 0;
 
 function selectType(type, el) {
   selectedType = type;
@@ -99,9 +101,11 @@ function runContentSearch() {
   const q = document.getElementById('content-search').value.trim();
   const el = document.getElementById('content-results');
   if (!q || !selectedType) { el.innerHTML = ''; return; }
+  const myRequestId = ++searchRequestId;
   fetch(`/admin/share/api/search?type=${selectedType}&q=${encodeURIComponent(q)}`)
     .then(r => r.json())
     .then(items => {
+      if (myRequestId !== searchRequestId) return;
       if (items.error) {
         el.innerHTML = `<p class="pl-caption">Couldn't reach the library right now.</p>`;
         return;
@@ -210,5 +214,14 @@ function emailShare() {
       statusEl.style.color = 'var(--pl-red)';
     });
 }
+
+window.selectType = selectType;
+window.selectDuration = selectDuration;
+window.createLink = createLink;
+window.copyShareLink = copyShareLink;
+window.emailShare = emailShare;
+window.pickContent = pickContent;
+window.debouncedContentSearch = debouncedContentSearch;
+})();
 </script>
 {% endblock %}

@@ -5,7 +5,7 @@
 {% block content %}
 <div style="display:flex; justify-content:space-between; align-items:center; margin:var(--pl-space-lg) 0 var(--pl-space-md);">
   <h1 style="font-size:32px;">📊 Settings</h1>
-  <a href="{{ url_for('admin.dashboard') }}" class="link-manage" style="margin:0;">← Dashboard</a>
+  <a href="{{ url_for('admin.dashboard') }}" class="link-manage" style="margin:0;" data-full-reload>← Dashboard</a>
 </div>
 
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">

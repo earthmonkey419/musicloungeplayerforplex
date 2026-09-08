@@ -57,7 +57,7 @@
       <div class="pl-card-icon">🎁</div>
       <h3>Share Some Music</h3>
       <p>Send an album, artist, or playlist as a private link.</p>
-      <a href="{{ url_for('share.new_share') }}" class="pl-btn pl-btn-dark" data-full-reload>Create a Link →</a>
+      <a href="{{ url_for('share.new_share') }}" class="pl-btn pl-btn-dark">Create a Link →</a>
     </div>
 
     <div class="pl-card pl-card-neutral pl-card-playlists">
@@ -152,6 +152,7 @@ let currentOffset = 0;
 let isLoadingResults = false;
 let hasMoreResults = false;
 let resultsObserver = null;
+let searchRequestId = 0;
 let allLoadedTracks = [];
 
 function trackRow(t, indexInAllLoaded) {
@@ -238,8 +239,13 @@ function maybeShowEndHint(tracks) {
 }
 
 async function loadResultsPage(isFirstPage) {
-  if (isLoadingResults) return;
-  if (!isFirstPage && !hasMoreResults) return;
+  // Only pagination ("load more") respects this guard now -- a brand
+  // new search (isFirstPage) always proceeds immediately and bumps
+  // searchRequestId, so it correctly supersedes whatever's still in
+  // flight rather than being silently dropped by it.
+  if (!isFirstPage && (!hasMoreResults || isLoadingResults)) return;
+
+  const myRequestId = isFirstPage ? ++searchRequestId : searchRequestId;
   isLoadingResults = true;
 
   resultsSection.hidden = false;
@@ -275,6 +281,14 @@ async function loadResultsPage(isFirstPage) {
     if (data.error) throw new Error(data.error);
   } catch (e) {
     data = { results: [], has_more: false, next_offset: currentOffset };
+  }
+
+  // A newer search has started since this request began -- discard
+  // this now-stale response instead of letting it overwrite what the
+  // user is actually looking for now.
+  if (myRequestId !== searchRequestId) {
+    isLoadingResults = false;
+    return;
   }
 
   if (!isFirstPage) removeLoadingMore();
