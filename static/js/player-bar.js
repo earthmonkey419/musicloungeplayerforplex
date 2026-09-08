@@ -45,7 +45,7 @@ window.MLPlayer = (function () {
     npTitle.textContent = track.title;
     npArtist.textContent = track.artist;
     npArt.src = `/art/${track.rating_key}`;
-    npPlayPause.textContent = (isPlayingIcon === false) ? "▶" : "⏸";
+    npPlayPause.classList.toggle("is-playing", isPlayingIcon !== false);
   }
 
   function rebuildShuffleOrder() {
@@ -200,8 +200,8 @@ window.MLPlayer = (function () {
   }
 
   npPlayPause.addEventListener("click", () => {
-    if (audioEl.paused) { audioEl.play(); npPlayPause.textContent = "⏸"; }
-    else { audioEl.pause(); npPlayPause.textContent = "▶"; }
+    if (audioEl.paused) { audioEl.play(); npPlayPause.classList.add("is-playing"); }
+    else { audioEl.pause(); npPlayPause.classList.remove("is-playing"); }
     notifyChange();
   });
 
@@ -216,7 +216,7 @@ window.MLPlayer = (function () {
     if (shuffleOn || queueIndex < queue.length - 1) {
       goNext();
     } else {
-      npPlayPause.textContent = "▶";
+      npPlayPause.classList.remove("is-playing");
       notifyChange();
     }
     endedListeners.forEach(cb => {
@@ -237,8 +237,8 @@ window.MLPlayer = (function () {
     });
   });
 
-  function pause() { audioEl.pause(); npPlayPause.textContent = "▶"; notifyChange(); }
-  function resume() { audioEl.play().catch(() => {}); npPlayPause.textContent = "⏸"; notifyChange(); }
+  function pause() { audioEl.pause(); npPlayPause.classList.remove("is-playing"); notifyChange(); }
+  function resume() { audioEl.play().catch(() => {}); npPlayPause.classList.add("is-playing"); notifyChange(); }
   function isPaused() { return audioEl.paused; }
 
   function attemptAutoplay(track, onBlocked) {

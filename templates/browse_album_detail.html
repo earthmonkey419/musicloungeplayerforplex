@@ -47,10 +47,9 @@
 </div>
 
 <script>
+(function () {
 const nativePlaylists = {{ playlists_for_modal | tojson }};
-</script>
 
-<script>
 function currentTracks() {
   return Array.from(document.querySelectorAll("#track-list .track-row")).map(row => ({
     rating_key: row.dataset.ref,
@@ -139,5 +138,6 @@ document.getElementById("atp-new-btn").addEventListener("click", () => {
       addTrackToPlaylist(data.playlist_id, name);
     });
 });
+})();
 </script>
 {% endblock %}

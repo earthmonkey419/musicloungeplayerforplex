@@ -45,6 +45,7 @@
 {% endif %}
 
 <script>
+(function () {
 const PLAYLIST_SOURCE = {{ playlist['source']|tojson }};
 
 function currentTracks() {
@@ -149,5 +150,6 @@ document.getElementById("export-btn").addEventListener("click", () => {
     });
 });
 {% endif %}
+})();
 </script>
 {% endblock %}

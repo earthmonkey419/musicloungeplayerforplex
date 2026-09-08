@@ -95,6 +95,7 @@
   background: var(--pl-teal, #173B3A);
   border-top: 1px solid rgba(255,248,233,0.15);
   padding: var(--pl-space-xs, 8px) 0;
+  transform: translateZ(0);
 }
 .pl-mobile-menu.pl-mobile-menu-open { display: flex; }
 .pl-mobile-menu-link {
@@ -355,6 +356,24 @@
 }
 .now-playing-bar[hidden] { display: none; }
 .now-playing-bar-page-hidden { display: none !important; }
+
+@media (max-width: 600px) {
+  .now-playing-bar {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .np-art { width: 32px; height: 32px; }
+  .np-info { flex: 1 1 auto; min-width: 40px; }
+  .np-controls { gap: 6px; }
+  .np-btn-nav, .np-btn-disabled {
+    width: 26px;
+    height: 26px;
+  }
+  .np-btn-nav .np-icon, .np-btn-disabled .np-icon { width: 15px; height: 15px; }
+  .np-btn-play { width: 32px; height: 32px; }
+  .np-btn-play .np-icon { width: 16px; height: 16px; }
+  .np-volume-wrap { display: none; }
+}
 .np-art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; }
 .np-info { flex: 0 0 200px; min-width: 0; }
 .np-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -368,21 +387,33 @@
   background: var(--pl-red);
   color: #fff;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+.np-btn-play .icon-pause { display: none; }
+.np-btn-play.is-playing .icon-play { display: none; }
+.np-btn-play.is-playing .icon-pause { display: block; }
 .np-btn-disabled {
   border: none;
   background: none;
   color: rgba(255,248,233,0.35);
-  font-size: 16px;
   cursor: not-allowed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .np-btn-nav {
   border: none;
   background: none;
   color: rgba(255,248,233,0.9);
-  font-size: 16px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+.np-icon { width: 18px; height: 18px; display: block; }
+.np-btn-play .np-icon { width: 20px; height: 20px; }
 .np-btn-nav:hover:not(:disabled) { color: var(--pl-red); }
 .np-btn-nav:disabled {
   color: rgba(255,248,233,0.35);
@@ -390,7 +421,7 @@
 }
 .np-shuffle-on { color: var(--pl-mint) !important; }
 .np-volume-wrap { display: flex; align-items: center; gap: 8px; }
-.np-volume-icon { font-size: 14px; opacity: 0.7; }
+.np-volume-icon { width: 16px; height: 16px; opacity: 0.7; }
 
 .stage-grid {
   display: grid;

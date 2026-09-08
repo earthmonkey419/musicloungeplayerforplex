@@ -5,14 +5,25 @@
     <div id="np-artist" class="np-artist"></div>
   </div>
   <div class="np-controls">
-    <button id="np-shuffle" class="np-btn-nav" title="Shuffle">🔀</button>
-    <button id="np-prev" class="np-btn-nav" title="Previous">⏮</button>
-    <button id="np-playpause" class="np-btn-play">▶</button>
-    <button id="np-next" class="np-btn-nav" title="Next">⏭</button>
-    <button id="np-queue-btn" class="np-btn-nav" title="Queue">☰</button>
+    <button id="np-shuffle" class="np-btn-nav" title="Shuffle">
+      <svg class="np-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
+    </button>
+    <button id="np-prev" class="np-btn-nav" title="Previous">
+      <svg class="np-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"></polygon><rect x="5" y="4" width="2" height="16"></rect></svg>
+    </button>
+    <button id="np-playpause" class="np-btn-play" title="Play/Pause">
+      <svg class="np-icon icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
+      <svg class="np-icon icon-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+    </button>
+    <button id="np-next" class="np-btn-nav" title="Next">
+      <svg class="np-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><rect x="17" y="4" width="2" height="16"></rect></svg>
+    </button>
+    <button id="np-queue-btn" class="np-btn-nav" title="Queue">
+      <svg class="np-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3.5" cy="6" r="1"></circle><circle cx="3.5" cy="12" r="1"></circle><circle cx="3.5" cy="18" r="1"></circle></svg>
+    </button>
   </div>
   <div class="np-volume-wrap">
-    <span class="np-volume-icon">🔊</span>
+    <svg class="np-icon np-volume-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M11 5 6 9H2v6h4l5 4V5z"></path><path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"></path></svg>
     <input id="np-volume" type="range" min="0" max="100" value="80">
   </div>
   <audio id="audio-el"></audio>

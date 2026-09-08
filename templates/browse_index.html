@@ -26,6 +26,7 @@
 </div>
 
 <script>
+(function () {
 const SORT_OPTIONS = {
   artists: [
     { value: "title", label: "Name (A–Z)" },
@@ -186,5 +187,6 @@ loadPage();
 window.__spaTeardown = function () {
   removeSentinel();
 };
+})();
 </script>
 {% endblock %}

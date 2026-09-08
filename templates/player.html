@@ -126,10 +126,11 @@
 </div>
 
 <script>
+(function () {
+// Native playlists only -- Plex-synced playlists are read-only
+// mirrors and can't accept a direct add (see playlists.py api_add_track).
 const nativePlaylists = {{ playlists | selectattr('source', 'equalto', 'native') | list | tojson }};
-</script>
 
-<script>
 const resultsSection = document.getElementById("results-section");
 const defaultView = document.getElementById("default-view");
 const resultsScroll = document.getElementById("results-scroll");
@@ -431,6 +432,7 @@ document.querySelectorAll("#default-view .pl-recently-played .track-row").forEac
 window.__spaTeardown = function () {
   removeSentinel();
 };
+})();
 </script>
 
 {% endblock %}
