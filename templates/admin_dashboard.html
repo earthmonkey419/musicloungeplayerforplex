@@ -160,7 +160,7 @@ function refreshState() {
       }
       const list = document.getElementById("queue-list");
       if (state.queue.length === 0) {
-        list.innerHTML = '<li class="empty">Queue\\'s empty — send guests to the join link below.</li>';
+        list.innerHTML = '<li class="empty">Queue\'s empty — send guests to the join link below.</li>';
       } else {
         list.innerHTML = state.queue.map((item, i) => `
           <li class="track-row">

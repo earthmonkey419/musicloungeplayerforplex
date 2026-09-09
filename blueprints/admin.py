@@ -232,4 +232,12 @@ def dashboard():
         qr_img.save(buf, format="PNG")
         qr_data_uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
-    return render_template("admin_dashboard.html", room=room, queue=queue, qr_data_uri=qr_data_uri, join_url=join_url)
+    return render_template(
+        "admin_dashboard.html",
+        room=room,
+        queue=queue,
+        qr_data_uri=qr_data_uri,
+        join_url=join_url,
+        needs_audio_bar=bool(room),
+        hide_bar_ui=True,
+    )

@@ -98,18 +98,36 @@ window.MLPlayer = (function () {
     // whatever scraps are available (often showing "No Artist Info"
     // and a garbled title, which is exactly what CarPlay showed
     // before this existed).
+    //
+    // Wrapped in try/catch deliberately: this runs synchronously
+    // inside renderNowPlaying(), which itself runs inside playAt()
+    // BEFORE updateNavButtons()/notifyChange(). An uncaught exception
+    // here -- on some browser/OS combination that behaves differently
+    // than tested against -- would silently abort the rest of
+    // playAt(), breaking the whole UI-update chain (play/pause icon,
+    // art, track highlighting) even though audio.play() already
+    // started. Peripheral CarPlay-support code should never be able
+    // to break core playback UI.
     if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title || "",
-      artist: track.artist || "",
-      album: track.album || "",
-      artwork: [{ src: `/art/${track.rating_key}`, sizes: "512x512", type: "image/jpeg" }],
-    });
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || "",
+        artist: track.artist || "",
+        album: track.album || "",
+        artwork: [{ src: `/art/${track.rating_key}`, sizes: "512x512", type: "image/jpeg" }],
+      });
+    } catch (e) {
+      console.error("MLPlayer: MediaSession metadata update failed (non-fatal):", e);
+    }
   }
 
   function updateMediaSessionPlaybackState() {
     if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.playbackState = audioEl.paused ? "paused" : "playing";
+    try {
+      navigator.mediaSession.playbackState = audioEl.paused ? "paused" : "playing";
+    } catch (e) {
+      console.error("MLPlayer: MediaSession playbackState update failed (non-fatal):", e);
+    }
   }
 
   function rebuildShuffleOrder() {
@@ -335,12 +353,35 @@ window.MLPlayer = (function () {
     // Lets CarPlay/lock-screen/Bluetooth car displays' own transport
     // controls actually drive playback here, same as the in-page
     // buttons already do.
-    navigator.mediaSession.setActionHandler("play", () => resume());
-    navigator.mediaSession.setActionHandler("pause", () => pause());
-    navigator.mediaSession.setActionHandler("previoustrack", () => goPrev());
-    navigator.mediaSession.setActionHandler("nexttrack", () => goNext());
-    navigator.mediaSession.setActionHandler("seekto", (details) => {
-      if (typeof details.seekTime === "number") seekTo(details.seekTime);
+    //
+    // Each call is wrapped individually and deliberately: this is
+    // TOP-LEVEL code that runs immediately when this IIFE first
+    // executes, BEFORE the final `return {...}` at the bottom of the
+    // file. If any single setActionHandler call throws -- real
+    // browsers have historically had inconsistent Media Session
+    // support, and an unrecognized/unsupported action name can throw
+    // on some implementations rather than being silently ignored as
+    // the spec intends -- an uncaught exception here would abort the
+    // rest of this IIFE entirely, meaning window.MLPlayer would never
+    // get assigned AT ALL. Every page using MLPlayer (Player, Room,
+    // /linked, everywhere) would break completely, not just this one
+    // feature -- a far bigger blast radius than a single broken
+    // OS-level control. Wrapping each individually also means one
+    // genuinely unsupported action doesn't prevent the other four
+    // from registering successfully.
+    const mediaSessionActions = [
+      ["play", () => resume()],
+      ["pause", () => pause()],
+      ["previoustrack", () => goPrev()],
+      ["nexttrack", () => goNext()],
+      ["seekto", (details) => { if (typeof details.seekTime === "number") seekTo(details.seekTime); }],
+    ];
+    mediaSessionActions.forEach(([action, handler]) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (e) {
+        console.error(`MLPlayer: could not register MediaSession action "${action}" (non-fatal):`, e);
+      }
     });
   }
 

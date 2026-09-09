@@ -58,9 +58,20 @@ def create_app():
 
     @app.after_request
     def no_store(response):
-        if "Cache-Control" not in response.headers:
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-            response.headers["Pragma"] = "no-cache"
+        # Deliberately unconditional -- ALWAYS overwrite whatever
+        # Cache-Control is already present, including Flask's own
+        # default for static files (Cache-Control: max-age=14400, a
+        # full 4 hours). That default meant every JS/CSS fix deployed
+        # here could take up to 4 hours to actually reach a real
+        # browser, independent of pm2 restart (only affects the
+        # origin, not Cloudflare's edge cache) and not fixed by a hard
+        # refresh either (only bypasses the browser's own cache, not
+        # Cloudflare's). Confirmed directly: curl -I .../player-bar.js
+        # showed cf-cache-status: REVALIDATED with that same 14400s
+        # max-age, actively causing real "nothing changed" confusion
+        # during tonight's own debugging.
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
         return response
 
     return app
