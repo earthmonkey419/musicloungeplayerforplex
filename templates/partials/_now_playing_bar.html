@@ -64,6 +64,7 @@
   </div>
 </div>
 
+{% if not hide_bar_ui %}
 <div id="queue-modal" class="pl-modal-overlay" hidden>
   <div class="pl-modal">
     <div class="pl-modal-header">
@@ -77,3 +78,4 @@
     <ul id="queue-modal-list" class="track-list" style="max-height:400px; overflow-y:auto;"></ul>
   </div>
 </div>
+{% endif %}

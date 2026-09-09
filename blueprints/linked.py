@@ -35,4 +35,5 @@ def view_share(share_token):
         content_title=title,
         content_artist=artist,
         needs_audio_bar=True,
+        hide_bar_ui=True,
     )
