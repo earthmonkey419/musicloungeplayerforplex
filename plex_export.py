@@ -60,7 +60,7 @@ def export_playlist(playlist_id):
     export_name = _namespaced_name(playlist["name"])
 
     existing = None
-    for pl in plex.playlists():
+    for pl in plex.playlists(playlistType="audio"):
         if pl.title == export_name:
             existing = pl
             break

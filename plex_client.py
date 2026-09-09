@@ -201,9 +201,13 @@ def search_content(content_type, query, limit=8):
                 if len(results) >= limit:
                     break
         elif content_type == "playlist":
-            for item in get_plex().playlists():
-                if getattr(item, "type", None) != "playlist":
-                    continue
+            # playlistType="audio" -- without this, a Plex server with
+            # movie/TV/photo playlists would surface those here too,
+            # since .playlists() with no filter returns every playlist
+            # regardless of media type. Confirmed via MusicMind's own
+            # production code, which uses this exact same parameter
+            # for its own playlist sidebar.
+            for item in get_plex().playlists(playlistType="audio"):
                 if q_lower in item.title.lower():
                     results.append({
                         "content_ref": item.ratingKey,
