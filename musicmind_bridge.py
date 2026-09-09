@@ -219,3 +219,90 @@ def browse_tracks_page(offset=0, limit=48, sort="title"):
     sort_key = _TRACK_SORTS.get(sort, _TRACK_SORTS["title"])
     sorted_pool = sorted(pool, key=sort_key)
     return result_cache.paged(sorted_pool, offset, limit)
+
+
+# --- Album search ------------------------------------------------------
+
+def search_albums(query, limit=8):
+    """Fast album search: match against MusicMind's own track-level
+    album/artist columns (grouped so one representative track stands
+    in per album), then resolve each MATCHED album's real Plex rating
+    key via a single targeted fetchItem() call per match -- NOT a full
+    library-wide album walk. At most `limit` such targeted calls, not
+    thousands.
+
+    Returns None (caller falls back to the live-Plex full walk) if
+    MusicMind isn't available or anything here fails -- this is a
+    pure speed optimization, never a hard dependency."""
+    if not is_available():
+        return None
+
+    q_like = f"%{query.lower()}%"
+    try:
+        conn = _connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT album, artist, MIN(rating_key) AS sample_rating_key "
+                "FROM tracks WHERE LOWER(album) LIKE ? "
+                "GROUP BY album, artist LIMIT ?",
+                (q_like, limit),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+    results = []
+    try:
+        plex = plex_client.get_plex()
+    except Exception:
+        return None
+
+    for row in rows:
+        try:
+            sample_track = plex.fetchItem(int(row["sample_rating_key"]))
+            results.append({
+                "content_ref": sample_track.parentRatingKey,
+                "title": row["album"],
+                "subtitle": row["artist"],
+            })
+        except Exception:
+            # This one album's sample track is gone/stale in MusicMind's
+            # snapshot -- skip just this result, not the whole search.
+            continue
+    return results
+
+
+def search_tracks_for_share(query, limit=8):
+    """Fast track search for Share Mode -- reuses the same proven
+    _musicmind_search() Player's own search already relies on, just
+    reshaped to the {content_ref, title, subtitle} shape Share's
+    picker expects instead of the fuller track-dict shape.
+
+    Genuinely fixes a correctness bug, not just speed: Plex's own
+    title__icontains filter (used by the live-Plex fallback in
+    search_content()) was confirmed NOT matching real, existing
+    multi-word titles -- "Les Fleurs" by Minnie Riperton, verified
+    directly to exist in MusicMind's own database, never appeared in
+    live-Plex search results for that exact query. MusicMind's literal
+    SQL LIKE match doesn't share whatever tokenization quirk Plex's API
+    has for multi-word phrases.
+
+    Returns None (caller falls back to the live-Plex path) if
+    MusicMind isn't available -- this is a speed AND correctness
+    improvement, never a hard dependency."""
+    if not is_available():
+        return None
+    try:
+        tracks = _musicmind_search(query, limit=limit)
+    except Exception:
+        return None
+    return [
+        {
+            "content_ref": t["rating_key"],
+            "title": t["title"],
+            "subtitle": t["artist"],
+        }
+        for t in tracks
+    ]

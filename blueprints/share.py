@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, url_for, current
 import config
 import db
 import plex_client
+import musicmind_bridge
 import lastfm_client
 import result_cache
 from email_utils import send_share_email
@@ -40,7 +41,31 @@ def api_share_search():
     if cached is not None:
         return jsonify(cached)
     try:
-        results = plex_client.search_content(content_type, q)
+        results = None
+        if content_type == "album":
+            # MusicMind fast path first -- the live-Plex fallback in
+            # search_content() unconditionally walks every album in
+            # the library (a real, proven 24+ second cost on a large
+            # library, confirmed directly). This path instead matches
+            # locally against MusicMind's track-level album/artist
+            # columns, then resolves only the handful of ACTUALLY
+            # matched albums' real Plex rating keys via targeted
+            # per-match lookups -- not a full library walk. Falls
+            # through to the old behavior if MusicMind isn't
+            # available or this returns nothing.
+            results = musicmind_bridge.search_albums(q)
+        elif content_type == "track":
+            # Same MusicMind-first approach, but this one fixes a real
+            # CORRECTNESS bug, not just speed: Plex's own
+            # title__icontains filter (the live-Plex fallback here)
+            # was confirmed not matching a real, existing multi-word
+            # title ("Les Fleurs" by Minnie Riperton, verified directly
+            # present in MusicMind's database) -- some tokenization
+            # quirk in Plex's own API for multi-word phrases that
+            # MusicMind's literal SQL LIKE match doesn't share.
+            results = musicmind_bridge.search_tracks_for_share(q)
+        if results is None:
+            results = plex_client.search_content(content_type, q)
         result_cache.cache_set(cache_key, results, ttl=120)
         return jsonify(results)
     except Exception:
@@ -64,6 +89,10 @@ def create_share():
     if not content_ref:
         return jsonify({"error": "Pick something to share first."}), 400
 
+    # Validate the content actually resolves in Plex, AND that it's
+    # genuinely the type claimed — closes the loop on the same class of
+    # bug search_content() guards against (a mismatched item type
+    # slipping through).
     try:
         item = plex_client.get_plex().fetchItem(int(content_ref))
     except Exception:
