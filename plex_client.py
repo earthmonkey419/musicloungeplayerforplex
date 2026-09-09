@@ -360,3 +360,22 @@ def list_all_tracks():
     section = get_music_section()
     tracks = section.searchTracks()
     return [_track_to_dict(t) for t in tracks]
+
+
+def list_all_playlists():
+    """All actual music playlists in Plex (playlistType="audio" --
+    same fix already applied in search_content(), otherwise a server
+    with movie/TV/photo playlists would include those too). Player no
+    longer requires an explicit "import" step per playlist -- every
+    one of these is automatically listed and viewable directly."""
+    playlists = get_plex().playlists(playlistType="audio")
+    return [
+        {
+            "rating_key": p.ratingKey,
+            "title": p.title,
+            "track_count": getattr(p, "leafCount", None),
+            "added_at": str(getattr(p, "addedAt", "") or ""),
+            "updated_at": str(getattr(p, "updatedAt", "") or ""),
+        }
+        for p in playlists
+    ]

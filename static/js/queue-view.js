@@ -1,8 +1,22 @@
+/*
+ * MusicLounge Player -- queue view.
+ *
+ * Wires up the Queue button/modal markup from
+ * partials/_now_playing_bar.html. Kept as its own file (not inline in
+ * that partial) because the partial is included BEFORE player-bar.js
+ * loads (it has to be -- player-bar.js's own script needs the
+ * <audio id="audio-el"> element to already exist in the DOM when it
+ * runs). Putting MLPlayer-dependent logic inline in the partial would
+ * reference MLPlayer before it exists. This file loads after
+ * player-bar.js instead, same as play-history.js and
+ * player-queue-sync.js.
+ */
 (function () {
   const btn = document.getElementById("np-queue-btn");
   const modal = document.getElementById("queue-modal");
   const list = document.getElementById("queue-modal-list");
   const closeBtn = document.getElementById("queue-modal-close");
+  const clearBtn = document.getElementById("queue-modal-clear");
   if (!btn || !modal || typeof MLPlayer === "undefined") return;
 
   function renderQueueModal() {
@@ -72,6 +86,12 @@
   });
   closeBtn.addEventListener("click", () => { modal.hidden = true; });
   modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+  clearBtn.addEventListener("click", () => {
+    if (MLPlayer.getQueue().length === 0) return;
+    if (!confirm("Clear the entire queue? This stops playback too.")) return;
+    MLPlayer.clearQueue();
+    renderQueueModal();
+  });
 
   MLPlayer.onChange(() => { if (!modal.hidden) renderQueueModal(); });
 })();

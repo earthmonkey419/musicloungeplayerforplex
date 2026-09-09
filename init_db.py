@@ -115,9 +115,17 @@ CREATE TABLE IF NOT EXISTS config (
 # Player: playlists (NEW)
 #
 # source='native'      -- created/edited in Player, owned by us
-# source='plex_synced'  -- read-only mirror of an existing Plex
-#                          playlist, plex_ref holds its rating_key,
-#                          refreshed on view
+# source='plex_synced'  -- RETIRED. Used to be a read-only mirror row
+#                          for an explicitly-imported Plex playlist.
+#                          Plex playlists now show up automatically on
+#                          the Playlists page with no DB row at all
+#                          (see plex_client.list_all_playlists()) --
+#                          see migrate_retire_synced_playlists.py for
+#                          the cleanup of any old rows. Still allowed
+#                          in the CHECK constraint for simplicity
+#                          (SQLite can't cheaply narrow a CHECK on an
+#                          existing table), but nothing creates these
+#                          rows anymore.
 # exported_ref          -- Plex rating_key of our last export for a
 #                          native playlist, NULL until first export.
 #                          Lets plex_export.py verify ownership before

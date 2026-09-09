@@ -529,20 +529,6 @@ def remove_track_from_playlist(playlist_id, track_row_id):
     conn.close()
 
 
-def create_synced_playlist(name, plex_ref):
-    now = _now()
-    conn = get_db()
-    cur = conn.execute(
-        "INSERT INTO playlists (name, source, plex_ref, created_at, updated_at) "
-        "VALUES (?, 'plex_synced', ?, ?, ?)",
-        (name, plex_ref, now, now),
-    )
-    playlist_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    return playlist_id
-
-
 def mark_playlist_exported(playlist_id, plex_ref):
     conn = get_db()
     conn.execute(

@@ -6,7 +6,6 @@
 <a href="{{ url_for('playlists.index') }}" class="link-manage">← All Playlists</a>
 <div class="pl-section-header">
   <h1 style="font-size:28px; line-height:36px; margin:0;">{{ playlist['name'] }}
-    {% if playlist['source'] == 'plex_synced' %}<span class="tag">Plex-synced (read-only)</span>{% endif %}
   </h1>
   {% if tracks %}
   <button id="play-all-btn" class="pl-btn pl-btn-primary">▶ Play All</button>

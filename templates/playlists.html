@@ -4,43 +4,81 @@
 {% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
 {% block content %}
 <div class="pl-hero" style="padding: var(--pl-space-lg); margin-top: var(--pl-space-lg);">
-  <h1 style="font-size:32px; line-height:40px;">Playlists</h1>
+  <h1 style="font-size:32px; line-height:40px; margin-bottom:8px;">Playlists</h1>
+  <p style="color:var(--pl-text-secondary); margin:0;">Your own playlists, plus every playlist in your Plex library -- automatically, no import step.</p>
 </div>
 
-<ul class="playlist-list playlist-list-full">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--pl-space-md); flex-wrap:wrap; gap:var(--pl-space-sm);">
+  <div style="display:flex; align-items:center; gap:8px;">
+    <label class="pl-caption" for="sort-select">Sort by</label>
+    <select id="sort-select" class="pl-text-input" style="padding:8px 12px;">
+      <option value="recent" {% if current_sort == 'recent' %}selected{% endif %}>Recently Updated</option>
+      <option value="date" {% if current_sort == 'date' %}selected{% endif %}>Date Created</option>
+      <option value="name" {% if current_sort == 'name' %}selected{% endif %}>Name (A–Z)</option>
+    </select>
+  </div>
+  <button id="new-playlist-btn" class="btn-secondary">+ New Native Playlist</button>
+</div>
+
+<ul id="playlist-list" class="playlist-list playlist-list-full">
   {% for p in playlists %}
-  <li data-playlist-id="{{ p['id'] }}">
+  <li data-playlist-id="{{ p['id'] if p['kind'] == 'native' else '' }}">
     <div>
-      <a href="{{ url_for('playlists.view', playlist_id=p['id']) }}">{{ p['name'] }}</a>
-      <span class="tag">{{ 'Plex-synced' if p['source'] == 'plex_synced' else 'Native' }}</span>
+      <a href="{{ url_for('playlists.view', playlist_id=p['id']) if p['kind'] == 'native' else url_for('playlists.plex_detail', rating_key=p['rating_key']) }}">{{ p['title'] }}</a>
+      <span class="tag">{{ 'Native' if p['kind'] == 'native' else 'Plex' }}</span>
+      {% if p['track_count'] is not none %}<span class="pl-caption">{{ p['track_count'] }} tracks</span>{% endif %}
     </div>
-    <button class="playlist-delete-btn" data-playlist-id="{{ p['id'] }}" data-playlist-name="{{ p['name'] }}" title="Delete playlist">✕</button>
+    {% if p['kind'] == 'native' %}
+    <button class="playlist-delete-btn" data-playlist-id="{{ p['id'] }}" data-playlist-name="{{ p['title'] }}" title="Delete playlist">✕</button>
+    {% endif %}
   </li>
   {% else %}
   <li class="empty">No playlists yet.</li>
   {% endfor %}
 </ul>
 
-<div class="playlist-actions">
-  <button id="new-playlist-btn" class="btn-secondary">+ New Native Playlist</button>
-  <button id="import-plex-btn" class="btn-secondary">Import from Plex</button>
-</div>
-
-<div id="import-plex-modal" class="pl-modal-overlay" hidden>
-  <div class="pl-modal">
-    <div class="pl-modal-header">
-      <h3>Import from Plex</h3>
-      <button id="ipm-close" class="pl-link-btn" title="Close">✕</button>
-    </div>
-    <div class="pl-search-input-wrap" style="margin-bottom: var(--pl-space-sm);">
-      <span class="pl-search-icon">⌕</span>
-      <input id="ipm-search" type="text" placeholder="Search your Plex playlists…" autocomplete="off">
-    </div>
-    <ul id="ipm-results" class="pl-modal-playlist-list"></ul>
-  </div>
-</div>
-
 <script>
+(function () {
+const listEl = document.getElementById("playlist-list");
+const sortSelect = document.getElementById("sort-select");
+
+function playlistRow(p) {
+  const li = document.createElement("li");
+  if (p.kind === "native") li.dataset.playlistId = p.id;
+  const href = p.kind === "native" ? `/playlists/${p.id}` : `/playlists/plex/${p.rating_key}`;
+  const trackCountHtml = (p.track_count !== null && p.track_count !== undefined)
+    ? `<span class="pl-caption">${p.track_count} tracks</span>` : "";
+  li.innerHTML = `
+    <div>
+      <a href="${href}">${p.title}</a>
+      <span class="tag">${p.kind === "native" ? "Native" : "Plex"}</span>
+      ${trackCountHtml}
+    </div>
+    ${p.kind === "native" ? `<button class="playlist-delete-btn" data-playlist-id="${p.id}" data-playlist-name="${p.title}" title="Delete playlist">✕</button>` : ""}
+  `;
+  const delBtn = li.querySelector(".playlist-delete-btn");
+  if (delBtn) attachDeleteHandler(delBtn);
+  return li;
+}
+
+function attachDeleteHandler(btn) {
+  btn.addEventListener("click", () => {
+    const name = btn.dataset.playlistName;
+    if (!confirm(`Delete "${name}"? This can't be undone. (This only removes it from Player -- native playlists only; Plex playlists aren't deletable from here.)`)) {
+      return;
+    }
+    fetch(`/playlists/api/${btn.dataset.playlistId}/delete`, {method: "POST"})
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) btn.closest("li").remove();
+        else alert(data.error || "Couldn't delete that playlist.");
+      })
+      .catch(() => alert("Something went wrong deleting that playlist."));
+  });
+}
+
+document.querySelectorAll(".playlist-delete-btn").forEach(attachDeleteHandler);
+
 document.getElementById("new-playlist-btn").addEventListener("click", () => {
   const name = prompt("Playlist name:");
   if (!name) return;
@@ -56,92 +94,26 @@ document.getElementById("new-playlist-btn").addEventListener("click", () => {
     });
 });
 
-document.querySelectorAll(".playlist-delete-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const name = btn.dataset.playlistName;
-    if (!confirm(`Delete "${name}"? This can't be undone. (This only removes it from Player -- if it's a Plex-synced playlist, the copy in Plex itself is untouched.)`)) {
-      return;
-    }
-    fetch(`/playlists/api/${btn.dataset.playlistId}/delete`, {method: "POST"})
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok) window.location.reload();
-        else alert(data.error || "Couldn't delete that playlist.");
-      })
-      .catch(() => alert("Something went wrong deleting that playlist."));
-  });
-});
-
-const ipmModal = document.getElementById("import-plex-modal");
-const ipmSearch = document.getElementById("ipm-search");
-const ipmResults = document.getElementById("ipm-results");
-let ipmSearchTimeout;
-
-document.getElementById("import-plex-btn").addEventListener("click", () => {
-  ipmSearch.value = "";
-  ipmResults.innerHTML = '<li class="empty">Type to search your Plex playlists.</li>';
-  ipmModal.hidden = false;
-  ipmSearch.focus();
-});
-
-document.getElementById("ipm-close").addEventListener("click", () => { ipmModal.hidden = true; });
-ipmModal.addEventListener("click", (e) => { if (e.target === ipmModal) ipmModal.hidden = true; });
-
-function renderImportResults(results) {
-  ipmResults.innerHTML = "";
-  if (!results.length) {
-    ipmResults.innerHTML = '<li class="empty">No matching Plex playlists found.</li>';
-    return;
-  }
-  results.forEach(r => {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.className = "pl-modal-playlist-btn";
-    btn.innerHTML = `<div>${r.title}</div><div class="pl-caption">${r.subtitle || ""}</div>`;
-    btn.addEventListener("click", () => importPlaylist(r.content_ref, r.title, btn));
-    li.appendChild(btn);
-    ipmResults.appendChild(li);
-  });
-}
-
-function importPlaylist(plexRef, name, btnEl) {
-  btnEl.disabled = true;
-  btnEl.style.opacity = "0.6";
-  fetch("{{ url_for('playlists.api_import_from_plex') }}", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({plex_ref: plexRef, name: name}),
-  })
+// Sort dropdown re-fetches client-side and re-renders -- a plain page
+// navigation here would leave the SPA zone and stop whatever's
+// playing, undoing the whole point of Playlists being in it.
+sortSelect.addEventListener("change", () => {
+  const sort = sortSelect.value;
+  fetch(`{{ url_for('playlists.api_list') }}?sort=${sort}`)
     .then(r => r.json())
     .then(data => {
-      if (data.ok) {
-        window.location.reload();
+      listEl.innerHTML = "";
+      if (data.playlists.length === 0) {
+        listEl.innerHTML = '<li class="empty">No playlists yet.</li>';
       } else {
-        alert(data.error || "Couldn't import that playlist.");
-        btnEl.disabled = false;
-        btnEl.style.opacity = "1";
+        data.playlists.forEach(p => listEl.appendChild(playlistRow(p)));
       }
+      const url = new URL(window.location.href);
+      url.searchParams.set("sort", data.sort);
+      history.replaceState(null, "", url.toString());
     })
-    .catch(() => {
-      alert("Something went wrong importing that playlist.");
-      btnEl.disabled = false;
-      btnEl.style.opacity = "1";
-    });
-}
-
-ipmSearch.addEventListener("input", () => {
-  clearTimeout(ipmSearchTimeout);
-  const q = ipmSearch.value.trim();
-  if (!q) {
-    ipmResults.innerHTML = '<li class="empty">Type to search your Plex playlists.</li>';
-    return;
-  }
-  ipmSearchTimeout = setTimeout(() => {
-    fetch(`{{ url_for('share.api_share_search') }}?type=playlist&q=${encodeURIComponent(q)}`)
-      .then(r => r.json())
-      .then(renderImportResults)
-      .catch(() => { ipmResults.innerHTML = '<li class="empty">Search failed -- try again.</li>'; });
-  }, 250);
+    .catch(() => alert("Couldn't reload playlists -- try again."));
 });
+})();
 </script>
 {% endblock %}

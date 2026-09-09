@@ -70,7 +70,6 @@
         <li>
           <a href="{{ url_for('playlists.view', playlist_id=p['id']) }}">
             {{ p['name'] }}
-            {% if p['source'] == 'plex_synced' %}<span class="tag">Plex</span>{% endif %}
           </a>
         </li>
         {% else %}

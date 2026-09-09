@@ -68,7 +68,13 @@
   <div class="pl-modal">
     <div class="pl-modal-header">
       <h3>Queue</h3>
-      <button id="queue-modal-close" class="pl-link-btn" title="Close">✕</button>
+      <div style="display:flex; gap:14px; align-items:center;">
+        <!-- Reserved spot: the "spawn Room / Share link" button
+             (still being designed -- see PLAYER-POLISH-ROADMAP.md)
+             is planned to live right here, alongside Clear. -->
+        <button id="queue-modal-clear" class="pl-link-btn" title="Clear queue">Clear</button>
+        <button id="queue-modal-close" class="pl-link-btn" title="Close">✕</button>
+      </div>
     </div>
     <ul id="queue-modal-list" class="track-list" style="max-height:400px; overflow-y:auto;"></ul>
   </div>

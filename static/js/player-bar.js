@@ -203,6 +203,26 @@ window.MLPlayer = (function () {
     }
   }
 
+  function clearQueue() {
+    // Same "nothing left to play" end-state as removeFromQueue()
+    // hitting zero, just reachable directly without removing one at
+    // a time. Also clears the OS-level media session -- otherwise
+    // CarPlay/lock-screen would keep showing a stale "now playing"
+    // card for a track that's no longer actually loaded.
+    queue = [];
+    queueIndex = -1;
+    shuffleOrder = [];
+    shuffleHistory = [];
+    audioEl.pause();
+    audioEl.removeAttribute("src");
+    nowPlayingBar.hidden = true;
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+    }
+    notifyChange();
+  }
+
   function reorderQueue(fromIndex, toIndex) {
     if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= queue.length) return;
     toIndex = Math.max(0, Math.min(toIndex, queue.length - 1));
@@ -419,7 +439,7 @@ window.MLPlayer = (function () {
   return {
     playTrack, playQueue, enqueue, pause, resume, isPaused, seekTo,
     getCurrent, getQueue, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
-    jumpTo, removeFromQueue, reorderQueue,
+    jumpTo, removeFromQueue, reorderQueue, clearQueue,
     onChange, onEnded, onTimeUpdate, attemptAutoplay,
   };
 })();

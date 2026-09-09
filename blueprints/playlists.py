@@ -9,10 +9,71 @@ from auth import admin_required
 bp = Blueprint("playlists", __name__)
 
 
+def _combined_playlists(sort):
+    """Shared by the page route and the JSON API route below, so the
+    sort dropdown can re-fetch client-side (staying within the SPA
+    zone, not interrupting playback) without duplicating this logic."""
+    native_rows = [dict(p) for p in db.list_playlists()]
+    native_items = []
+    for p in native_rows:
+        native_items.append({
+            "kind": "native",
+            "id": p["id"],
+            "title": p["name"],
+            "created_at": p["created_at"] or "",
+            "updated_at": p["updated_at"] or "",
+            "track_count": len(db.get_playlist_tracks(p["id"])),
+        })
+
+    try:
+        plex_playlists = plex_client.list_all_playlists()
+    except Exception:
+        current_app.logger.exception("Failed to list Plex playlists")
+        plex_playlists = []
+
+    plex_items = [{
+        "kind": "plex",
+        "rating_key": p["rating_key"],
+        "title": p["title"],
+        "created_at": p["added_at"],
+        "updated_at": p["updated_at"],
+        "track_count": p["track_count"],
+    } for p in plex_playlists]
+
+    combined = native_items + plex_items
+    if sort == "name":
+        combined.sort(key=lambda x: x["title"].lower())
+    elif sort == "date":
+        combined.sort(key=lambda x: x["created_at"], reverse=True)
+    else:
+        sort = "recent"
+        combined.sort(key=lambda x: x["updated_at"], reverse=True)
+
+    return combined, sort
+
+
+# --- Views --------------------------------------------------------------
+
 @bp.route("/")
 @admin_required
 def index():
-    return render_template("playlists.html", playlists=db.list_playlists(), player_family=True)
+    # No more "import a Plex playlist" step -- every Plex playlist is
+    # automatically listed here, live, alongside native ones, in one
+    # combined sortable list. Native rows come from our own DB;
+    # Plex ones are fetched fresh every view (small lists, no caching
+    # needed at this scale -- see PLAYER-POLISH-ROADMAP.md if that
+    # changes).
+    sort = request.args.get("sort", "recent")
+    combined, sort = _combined_playlists(sort)
+    return render_template("playlists.html", playlists=combined, current_sort=sort, player_family=True)
+
+
+@bp.route("/api/list")
+@admin_required
+def api_list():
+    sort = request.args.get("sort", "recent")
+    combined, sort = _combined_playlists(sort)
+    return jsonify({"playlists": combined, "sort": sort})
 
 
 @bp.route("/<int:playlist_id>")
@@ -21,13 +82,6 @@ def view(playlist_id):
     playlist = db.get_playlist(playlist_id)
     if not playlist:
         return "Playlist not found.", 404
-
-    if playlist["source"] == "plex_synced":
-        try:
-            _, _, tracks = plex_client.get_content_tracks("playlist", playlist["plex_ref"])
-            db.replace_playlist_tracks(playlist_id, tracks)
-        except Exception:
-            current_app.logger.exception("Failed to refresh synced playlist id=%r", playlist_id)
 
     tracks = db.get_playlist_tracks(playlist_id)
     return render_template(
@@ -38,6 +92,34 @@ def view(playlist_id):
         player_family=True,
     )
 
+
+@bp.route("/plex/<rating_key>")
+@admin_required
+def plex_detail(rating_key):
+    # Read-only -- live from Plex every view, same refresh-always
+    # philosophy the old plex_synced rows used, just without needing a
+    # DB row to remember you'd "imported" it first.
+    try:
+        _, _, tracks = plex_client.get_content_tracks("playlist", rating_key)
+        playlist_obj = plex_client.get_plex().fetchItem(int(rating_key))
+        title = playlist_obj.title
+    except Exception:
+        current_app.logger.exception("Failed to load Plex playlist rating_key=%r", rating_key)
+        return "Couldn't load that playlist.", 502
+
+    native_playlists = [dict(p) for p in db.list_playlists() if p["source"] == "native"]
+    return render_template(
+        "playlist_plex_detail.html",
+        title=title,
+        rating_key=rating_key,
+        tracks=tracks,
+        playlists_for_modal=native_playlists,
+        lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        player_family=True,
+    )
+
+
+# --- Native playlist CRUD (JSON API) -------------------------------------
 
 @bp.route("/api/create", methods=["POST"])
 @admin_required
@@ -109,7 +191,7 @@ def api_reorder(playlist_id):
         return jsonify({"error": "Can't reorder a Plex-synced playlist here -- reorder it in Plex."}), 400
 
     body = request.get_json(silent=True) or {}
-    ordered_refs = body.get("track_refs")
+    ordered_refs = body.get("track_refs")  # list of rating_keys, new order
     if not ordered_refs:
         return jsonify({"error": "Missing track_refs."}), 400
 
@@ -128,24 +210,7 @@ def api_reorder(playlist_id):
     return jsonify({"ok": True})
 
 
-@bp.route("/api/import-from-plex", methods=["POST"])
-@admin_required
-def api_import_from_plex():
-    body = request.get_json(silent=True) or {}
-    plex_ref = body.get("plex_ref")
-    name = body.get("name", "").strip()
-    if not plex_ref or not name:
-        return jsonify({"error": "Missing playlist selection."}), 400
-
-    playlist_id = db.create_synced_playlist(name, plex_ref)
-    try:
-        _, _, tracks = plex_client.get_content_tracks("playlist", plex_ref)
-        db.replace_playlist_tracks(playlist_id, tracks)
-    except Exception:
-        current_app.logger.exception("Initial sync failed for imported playlist plex_ref=%r", plex_ref)
-
-    return jsonify({"ok": True, "playlist_id": playlist_id})
-
+# --- Export to Plex --------------------------------------------------------
 
 @bp.route("/api/<int:playlist_id>/export", methods=["POST"])
 @admin_required
