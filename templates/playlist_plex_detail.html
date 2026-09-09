@@ -8,6 +8,7 @@
   <h1 style="font-size:28px; line-height:36px; margin:0;">{{ title }} <span class="tag">Plex</span></h1>
   {% if tracks %}
   <button id="play-all-btn" class="pl-btn pl-btn-primary">▶ Play All</button>
+  <button id="playlist-room-share-trigger" class="room-share-trigger" title="Room or Share this playlist">⋯</button>
   {% endif %}
 </div>
 
@@ -22,6 +23,7 @@
     <button class="track-play" title="Play">▶</button>
     <button class="track-enqueue" title="Add to queue">⏬</button>
     <button class="track-add" title="Add to playlist">+</button>
+    <button class="room-share-trigger" title="Room or Share">⋯</button>
   </li>
   {% else %}
   <li class="empty">No tracks found in this playlist.</li>
@@ -55,17 +57,35 @@ function currentTracks() {
   }));
 }
 
+const playAllBtn = document.getElementById("play-all-btn");
+if (playAllBtn) {
+  playAllBtn.addEventListener("click", () => MLPlayer.playQueue(currentTracks(), 0));
+}
+
+const playlistRoomShareBtn = document.getElementById("playlist-room-share-trigger");
+if (playlistRoomShareBtn) {
+  playlistRoomShareBtn.addEventListener("click", (e) => {
+    window.openRoomShareMenu(e.currentTarget, {
+      type: "playlist",
+      ref: "{{ rating_key }}",
+      title: {{ title | tojson }},
+      artist: "",
+    });
+  });
+}
+
 document.querySelectorAll(".track-play").forEach((btn, i) => {
   btn.addEventListener("click", () => MLPlayer.playQueue(currentTracks(), i));
 });
 document.querySelectorAll(".track-enqueue").forEach((btn, i) => {
   btn.addEventListener("click", () => MLPlayer.enqueue(currentTracks()[i]));
 });
-
-const playAllBtn = document.getElementById("play-all-btn");
-if (playAllBtn) {
-  playAllBtn.addEventListener("click", () => MLPlayer.playQueue(currentTracks(), 0));
-}
+document.querySelectorAll(".room-share-trigger:not(#playlist-room-share-trigger)").forEach((btn, i) => {
+  btn.addEventListener("click", (e) => {
+    const t = currentTracks()[i];
+    window.openRoomShareMenu(e.currentTarget, { type: "track", ref: t.rating_key, title: t.title, artist: t.artist });
+  });
+});
 
 const atpModal = document.getElementById("add-to-playlist-modal");
 const atpTrackLabel = document.getElementById("atp-track-label");

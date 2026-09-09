@@ -30,6 +30,8 @@
     </div>
     {% if p['kind'] == 'native' %}
     <button class="playlist-delete-btn" data-playlist-id="{{ p['id'] }}" data-playlist-name="{{ p['title'] }}" title="Delete playlist">✕</button>
+    {% else %}
+    <button class="room-share-trigger" data-rating-key="{{ p['rating_key'] }}" data-title="{{ p['title'] }}" title="Room or Share">⋯</button>
     {% endif %}
   </li>
   {% else %}
@@ -48,17 +50,33 @@ function playlistRow(p) {
   const href = p.kind === "native" ? `/playlists/${p.id}` : `/playlists/plex/${p.rating_key}`;
   const trackCountHtml = (p.track_count !== null && p.track_count !== undefined)
     ? `<span class="pl-caption">${p.track_count} tracks</span>` : "";
+  const actionHtml = p.kind === "native"
+    ? `<button class="playlist-delete-btn" data-playlist-id="${p.id}" data-playlist-name="${p.title}" title="Delete playlist">✕</button>`
+    : `<button class="room-share-trigger" data-rating-key="${p.rating_key}" data-title="${p.title}" title="Room or Share">⋯</button>`;
   li.innerHTML = `
     <div>
       <a href="${href}">${p.title}</a>
       <span class="tag">${p.kind === "native" ? "Native" : "Plex"}</span>
       ${trackCountHtml}
     </div>
-    ${p.kind === "native" ? `<button class="playlist-delete-btn" data-playlist-id="${p.id}" data-playlist-name="${p.title}" title="Delete playlist">✕</button>` : ""}
+    ${actionHtml}
   `;
   const delBtn = li.querySelector(".playlist-delete-btn");
   if (delBtn) attachDeleteHandler(delBtn);
+  const roomShareBtn = li.querySelector(".room-share-trigger");
+  if (roomShareBtn) attachRoomShareHandler(roomShareBtn);
   return li;
+}
+
+function attachRoomShareHandler(btn) {
+  btn.addEventListener("click", (e) => {
+    window.openRoomShareMenu(e.currentTarget, {
+      type: "playlist",
+      ref: btn.dataset.ratingKey,
+      title: btn.dataset.title,
+      artist: "",
+    });
+  });
 }
 
 function attachDeleteHandler(btn) {
@@ -78,6 +96,7 @@ function attachDeleteHandler(btn) {
 }
 
 document.querySelectorAll(".playlist-delete-btn").forEach(attachDeleteHandler);
+document.querySelectorAll(".room-share-trigger").forEach(attachRoomShareHandler);
 
 document.getElementById("new-playlist-btn").addEventListener("click", () => {
   const name = prompt("Playlist name:");

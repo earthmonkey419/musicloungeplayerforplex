@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, Response, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, Response, current_app, jsonify
 import io
 import csv
 import base64
@@ -6,6 +6,7 @@ from datetime import datetime
 import qrcode
 import config
 import db
+import plex_client
 import lastfm_client
 from auth import admin_required
 from email_utils import send_password_reset_email
@@ -241,3 +242,94 @@ def dashboard():
         needs_audio_bar=bool(room),
         hide_bar_ui=True,
     )
+
+def _send_tracks_to_room(tracks, room_name_if_new):
+    """Shared by both routes below. Adds `tracks` (a list of track
+    dicts) to whatever Room is currently active, creating one named
+    `room_name_if_new` only if none is active -- this never silently
+    ends/replaces an existing room (which could have real guests in
+    it), it only ever adds to it. Matches db.create_room()'s own
+    single-active-room design, just applied one level up: we CHECK
+    for an active room first rather than always calling create_room()
+    (which would itself end any existing one).
+
+    Also promotes the first track to now_playing if nothing was
+    already playing -- matches exactly what room.api_add_to_queue()
+    does for a guest's own first add (see that route: it checks
+    `if not room["now_playing_ref"]`, then pop_next() + set_now_playing()).
+    Without this, tracks landed in the queue correctly but the Now
+    Playing card stayed empty until a guest happened to add something
+    themselves, which is what actually triggered the promotion."""
+    room = db.get_active_room()
+    was_empty_before = not room or not room["now_playing_ref"]
+    if not room:
+        db.create_room(room_name_if_new or "My Lounge")
+        room = db.get_active_room()
+    for track in tracks:
+        # Defensive normalization -- some pages' currentTracks() reads
+        # straight off DOM data-* attributes (rating_key/title/artist
+        # only, no duration_sec, since it was never needed for
+        # display there before this feature existed). Filling in a
+        # safe default here is far simpler and lower-risk than
+        # retrofitting duration_sec into every affected template's
+        # markup for a value that was never actually needed until now.
+        db.add_to_queue(room["session_id"], {
+            "rating_key": track.get("rating_key"),
+            "title": track.get("title", "Unknown Title"),
+            "artist": track.get("artist", "Unknown Artist"),
+            "duration_sec": track.get("duration_sec") or 0,
+        })
+    if was_empty_before:
+        nxt = db.pop_next(room["session_id"])
+        if nxt:
+            db.set_now_playing(room["session_id"], db.queue_row_to_track(nxt))
+    return room
+
+
+@bp.route("/room/send-content", methods=["POST"])
+@admin_required
+def room_send_content():
+    """Powers the per-item "Start a Room with this" action on a
+    track/playlist/album. Reuses get_content_tracks() -- the same
+    resolver Share links already use -- so a track/album/playlist all
+    correctly resolve to their real track list, capped at that
+    function's existing 100-track safety limit (no separate 20-track
+    cap here -- that cap is specifically for the queue-send case
+    below, where a queue could have accumulated unintentionally large;
+    a playlist/album the admin explicitly picked is a different,
+    deliberate case)."""
+    body = request.get_json(silent=True) or {}
+    content_type = body.get("content_type")
+    content_ref = body.get("content_ref")
+    content_title = body.get("content_title", "")
+    if content_type not in ("track", "album", "playlist"):
+        return jsonify({"error": "Unsupported content type."}), 400
+    try:
+        _, _, tracks = plex_client.get_content_tracks(content_type, content_ref)
+    except Exception:
+        current_app.logger.exception("room_send_content failed type=%r ref=%r", content_type, content_ref)
+        return jsonify({"error": "Couldn't load that content."}), 502
+    if not tracks:
+        return jsonify({"error": "No tracks found for that."}), 404
+    _send_tracks_to_room(tracks, content_title)
+    return jsonify({"ok": True, "redirect": url_for("admin.dashboard")})
+
+
+@bp.route("/room/send-queue", methods=["POST"])
+@admin_required
+def room_send_queue():
+    """Powers "Send Queue to Room" from the Queue popup. Tracks come
+    directly from the client (MLPlayer.getQueue()) since a personal
+    queue isn't a single Plex-addressable entity the server could
+    resolve on its own, unlike send-content above. Capped at 20 --
+    server-side, not just client-side -- per the original brainstorm:
+    a queue could have accumulated unintentionally large, unlike a
+    playlist/album the admin deliberately picked."""
+    body = request.get_json(silent=True) or {}
+    tracks = body.get("tracks", [])
+    if not tracks:
+        return jsonify({"error": "Queue is empty."}), 400
+    tracks = tracks[:20]
+    room_name = tracks[0].get("title", "My Lounge")
+    _send_tracks_to_room(tracks, room_name)
+    return jsonify({"ok": True, "redirect": url_for("admin.dashboard")})

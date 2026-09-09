@@ -25,6 +25,7 @@
     </div>
     <button class="track-play" title="Play">▶</button>
     <button class="track-enqueue" title="Add to queue">⏬</button>
+    <button class="room-share-trigger" title="Room or Share">⋯</button>
     {% if playlist['source'] == 'native' %}
     <button class="track-remove" data-row-id="{{ t['id'] }}" title="Remove">✕</button>
     {% endif %}
@@ -47,6 +48,9 @@
 (function () {
 const PLAYLIST_SOURCE = {{ playlist['source']|tojson }};
 
+// Read track data straight from the rendered rows rather than passing
+// it separately from Jinja -- keeps one source of truth, and it's
+// always current even after a drag reorder (which reloads the page).
 function currentTracks() {
   return Array.from(document.querySelectorAll("#track-list .track-row")).map(row => ({
     rating_key: row.dataset.ref,
@@ -64,6 +68,13 @@ document.querySelectorAll(".track-play").forEach((btn, i) => {
 document.querySelectorAll(".track-enqueue").forEach((btn, i) => {
   btn.addEventListener("click", () => {
     MLPlayer.enqueue(currentTracks()[i]);
+  });
+});
+
+document.querySelectorAll(".room-share-trigger").forEach((btn, i) => {
+  btn.addEventListener("click", (e) => {
+    const t = currentTracks()[i];
+    window.openRoomShareMenu(e.currentTarget, { type: "track", ref: t.rating_key, title: t.title, artist: t.artist });
   });
 });
 
@@ -87,6 +98,7 @@ document.querySelectorAll(".track-remove").forEach(btn => {
   });
 });
 
+// --- Drag-to-reorder (native playlists only) -----------------------------
 if (PLAYLIST_SOURCE === "native") {
   const trackList = document.getElementById("track-list");
   let draggedEl = null;

@@ -166,12 +166,16 @@ function trackRow(t, indexInAllLoaded) {
     <button class="track-play" title="Play">▶</button>
     <button class="track-enqueue" title="Add to queue">⏬</button>
     <button class="track-add" title="Add to playlist">+</button>
+    <button class="room-share-trigger" title="Room or Share">⋯</button>
   `;
   li.querySelector(".track-play").addEventListener("click", () => {
     MLPlayer.playQueue(allLoadedTracks, indexInAllLoaded);
   });
   li.querySelector(".track-enqueue").addEventListener("click", () => MLPlayer.enqueue(t));
   li.querySelector(".track-add").addEventListener("click", () => openAddToPlaylist(t));
+  li.querySelector(".room-share-trigger").addEventListener("click", (e) => {
+    window.openRoomShareMenu(e.currentTarget, { type: "track", ref: t.rating_key, title: t.title, artist: t.artist });
+  });
   return li;
 }
 

@@ -17,6 +17,7 @@
   const list = document.getElementById("queue-modal-list");
   const closeBtn = document.getElementById("queue-modal-close");
   const clearBtn = document.getElementById("queue-modal-clear");
+  const sendToRoomBtn = document.getElementById("queue-send-to-room");
   if (!btn || !modal || typeof MLPlayer === "undefined") return;
 
   function renderQueueModal() {
@@ -92,6 +93,35 @@
     MLPlayer.clearQueue();
     renderQueueModal();
   });
+
+  if (sendToRoomBtn) {
+    sendToRoomBtn.addEventListener("click", () => {
+      const queue = MLPlayer.getQueue();
+      if (queue.length === 0) return;
+      sendToRoomBtn.disabled = true;
+      sendToRoomBtn.textContent = "Sending…";
+      fetch("/admin/room/send-queue", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ tracks: queue }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.ok) {
+            window.location.href = data.redirect;
+          } else {
+            alert(data.error || "Couldn't send the queue to a Room.");
+            sendToRoomBtn.disabled = false;
+            sendToRoomBtn.textContent = "📡 Room";
+          }
+        })
+        .catch(() => {
+          alert("Something went wrong sending the queue to a Room.");
+          sendToRoomBtn.disabled = false;
+          sendToRoomBtn.textContent = "📡 Room";
+        });
+    });
+  }
 
   MLPlayer.onChange(() => { if (!modal.hidden) renderQueueModal(); });
 })();

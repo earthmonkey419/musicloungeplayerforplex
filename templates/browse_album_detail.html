@@ -11,6 +11,7 @@
   </div>
   {% if tracks %}
   <button id="play-album-btn" class="pl-btn pl-btn-primary">▶ Play Album</button>
+  <button id="album-room-share-trigger" class="room-share-trigger" title="Room or Share this album">⋯</button>
   {% endif %}
 </div>
 
@@ -25,6 +26,7 @@
     <button class="track-play" title="Play">▶</button>
     <button class="track-enqueue" title="Add to queue">⏬</button>
     <button class="track-add" title="Add to playlist">+</button>
+    <button class="room-share-trigger" title="Room or Share">⋯</button>
   </li>
   {% else %}
   <li class="empty">No tracks found on this album.</li>
@@ -58,18 +60,37 @@ function currentTracks() {
   }));
 }
 
+const playAlbumBtn = document.getElementById("play-album-btn");
+if (playAlbumBtn) {
+  playAlbumBtn.addEventListener("click", () => MLPlayer.playQueue(currentTracks(), 0));
+}
+
+const albumRoomShareBtn = document.getElementById("album-room-share-trigger");
+if (albumRoomShareBtn) {
+  albumRoomShareBtn.addEventListener("click", (e) => {
+    window.openRoomShareMenu(e.currentTarget, {
+      type: "album",
+      ref: "{{ rating_key }}",
+      title: {{ album_title | tojson }},
+      artist: {{ artist_title | tojson }},
+    });
+  });
+}
+
 document.querySelectorAll(".track-play").forEach((btn, i) => {
   btn.addEventListener("click", () => MLPlayer.playQueue(currentTracks(), i));
 });
 document.querySelectorAll(".track-enqueue").forEach((btn, i) => {
   btn.addEventListener("click", () => MLPlayer.enqueue(currentTracks()[i]));
 });
+document.querySelectorAll(".room-share-trigger:not(#album-room-share-trigger)").forEach((btn, i) => {
+  btn.addEventListener("click", (e) => {
+    const t = currentTracks()[i];
+    window.openRoomShareMenu(e.currentTarget, { type: "track", ref: t.rating_key, title: t.title, artist: t.artist });
+  });
+});
 
-const playAlbumBtn = document.getElementById("play-album-btn");
-if (playAlbumBtn) {
-  playAlbumBtn.addEventListener("click", () => MLPlayer.playQueue(currentTracks(), 0));
-}
-
+// --- Add-to-playlist modal (same pattern as player.html) -----------------
 const atpModal = document.getElementById("add-to-playlist-modal");
 const atpTrackLabel = document.getElementById("atp-track-label");
 const atpPlaylistList = document.getElementById("atp-playlist-list");

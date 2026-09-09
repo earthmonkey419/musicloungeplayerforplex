@@ -758,6 +758,50 @@
    obvious; the art/button sizing likely reverted too, just less
    noticeably. Keeping this block last guarantees it always wins
    regardless of what gets added elsewhere later. */
+/* --- Start a Room / Share a Link popover --- */
+.room-share-trigger {
+  font-family: inherit;
+  font-size: 18px;
+  line-height: 1;
+  border: none;
+  background: none;
+  color: var(--pl-text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.room-share-trigger:hover { color: var(--pl-text); }
+
+.room-share-popover {
+  background: #fff;
+  border-radius: var(--pl-radius-md);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  padding: 6px;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 40;
+}
+.room-share-popover-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--pl-text);
+}
+.room-share-popover-item:hover { background: var(--pl-surface); }
+.room-share-popover-status {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 @media (max-width: 600px) {
   .now-playing-bar {
     padding: 10px 14px;
