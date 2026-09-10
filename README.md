@@ -99,7 +99,7 @@ This is a single-admin, browser-based tool — there's no multi-user account sys
 
 ## License
 
-*(Not yet decided — do not assume a permissive license until this section says otherwise.)*
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
