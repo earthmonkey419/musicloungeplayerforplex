@@ -112,11 +112,18 @@ def api_save_queue():
 def api_search():
     q = request.args.get("q", "").strip()
     if not q:
-        return jsonify({"results": [], "has_more": False, "next_offset": 0})
+        return jsonify({"results": [], "albums": [], "has_more": False, "next_offset": 0})
     offset = max(0, request.args.get("offset", 0, type=int) or 0)
     limit = min(50, max(1, request.args.get("limit", 20, type=int) or 20))
     try:
-        return jsonify(musicmind_bridge.search_tracks_page(q, offset=offset, limit=limit))
+        page = musicmind_bridge.search_tracks_page(q, offset=offset, limit=limit)
+        # Albums only on the first page -- this is a "top matches"
+        # section shown once above the track results, not something
+        # to re-fetch on every subsequent "load more" page for the
+        # same query. None (MusicMind unavailable) degrades to an
+        # empty list -- the track results still work either way.
+        page["albums"] = (musicmind_bridge.search_albums_for_player(q) or []) if offset == 0 else []
+        return jsonify(page)
     except Exception:
         current_app.logger.exception("Player search failed for query: %r", q)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
@@ -135,4 +142,27 @@ def api_mood(mood_key):
         return jsonify(page)
     except Exception:
         current_app.logger.exception("Player mood lookup failed for: %r", mood_key)
+        return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
+
+
+@bp.route("/api/player/content-tracks")
+@admin_required
+def api_content_tracks():
+    """Read-only tracklist resolver -- powers "Play Next" for an album
+    or playlist from the shared Room/Share popover. A single track's
+    own data is already known client-side (no resolution needed); this
+    is only for the album/playlist case, where the frontend doesn't
+    have the full tracklist on hand. Reuses the same get_content_tracks()
+    Share links and Start-a-Room already rely on for this exact
+    resolution, just returned directly as JSON with no other side
+    effects (no room, no share link created)."""
+    content_type = request.args.get("type", "")
+    content_ref = request.args.get("ref", "")
+    if content_type not in ("album", "playlist") or not content_ref:
+        return jsonify({"error": "Invalid type or ref."}), 400
+    try:
+        _, _, tracks = plex_client.get_content_tracks(content_type, content_ref)
+        return jsonify({"tracks": tracks})
+    except Exception:
+        current_app.logger.exception("content-tracks resolver failed type=%r ref=%r", content_type, content_ref)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502

@@ -23,6 +23,7 @@
   <div id="browse-scroll" class="pl-results-scroll" style="max-height:70vh;">
     <div id="browse-grid" class="browse-grid"></div>
   </div>
+  <div id="az-quickbar" class="az-quickbar" hidden></div>
   <button id="browse-back-to-top" class="pl-back-to-top" hidden title="Back to top">↑ Top</button>
 </div>
 
@@ -221,6 +222,45 @@ function resetAndLoad() {
   loadPage();
 }
 
+// --- A-Z quickbar ------------------------------------------------------
+// Only meaningful when sorted by title -- jumping through a
+// differently-sorted pool (year, date added, etc.) wouldn't land on a
+// meaningful letter-ordered position. See result_cache.offset_for_letter()'s
+// own docstring for the full reasoning.
+const quickbarEl = document.getElementById("az-quickbar");
+"#ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(letter => {
+  const btn = document.createElement("button");
+  btn.className = "az-quickbar-letter";
+  btn.textContent = letter;
+  btn.addEventListener("click", () => jumpToLetter(letter));
+  quickbarEl.appendChild(btn);
+});
+
+function updateQuickbarVisibility() {
+  quickbarEl.hidden = currentSort !== "title";
+}
+
+async function jumpToLetter(letter) {
+  if (loading) return;
+  let data;
+  try {
+    const res = await fetch(`/browse/api/letter-offset?type=${currentType}&letter=${encodeURIComponent(letter)}`);
+    data = await res.json();
+    if (data.error) throw new Error(data.error);
+  } catch (e) {
+    return;
+  }
+  hasMore = true;
+  allLoadedTracks = [];
+  gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
+  gridEl.innerHTML = "";
+  removeSentinel();
+  scrollEl.scrollTop = 0;
+  backToTopBtn.hidden = true;
+  offset = typeof data.offset === "number" ? data.offset : 0;
+  loadPage();
+}
+
 function openAddToPlaylist(track) {
   atpCurrentTrack = track;
   atpTrackLabel.textContent = `"${track.title}" — ${track.artist}`;
@@ -287,6 +327,7 @@ typeButtons.forEach(btn => {
     populateSortOptions();
     setActiveTypeButton();
     updateUrl();
+    updateQuickbarVisibility();
     resetAndLoad();
   });
 });
@@ -294,6 +335,7 @@ typeButtons.forEach(btn => {
 sortSelect.addEventListener("change", () => {
   currentSort = sortSelect.value;
   updateUrl();
+  updateQuickbarVisibility();
   resetAndLoad();
 });
 
@@ -306,6 +348,7 @@ populateSortOptions();
 setActiveTypeButton();
 gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
 updateUrl();
+updateQuickbarVisibility();
 loadPage();
 
 // SPA-nav teardown -- disconnects the IntersectionObserver before

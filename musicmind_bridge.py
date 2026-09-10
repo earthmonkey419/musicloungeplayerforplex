@@ -221,6 +221,19 @@ def browse_tracks_page(offset=0, limit=48, sort="title"):
     return result_cache.paged(sorted_pool, offset, limit)
 
 
+def track_letter_offset(letter):
+    """Powers the A-Z quickbar for Browse Tracks. Only meaningful for
+    the default title sort -- see result_cache.offset_for_letter()'s
+    own docstring for why."""
+    cache_key = ("browse_tracks",)
+    pool = result_cache.cache_get(cache_key)
+    if pool is None:
+        pool = _build_track_browse_pool()
+        result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
+    sorted_pool = sorted(pool, key=_TRACK_SORTS["title"])
+    return result_cache.offset_for_letter(sorted_pool, lambda t: t["title"], letter)
+
+
 # --- Album search ------------------------------------------------------
 
 def search_albums(query, limit=8):
@@ -306,3 +319,60 @@ def search_tracks_for_share(query, limit=8):
         }
         for t in tracks
     ]
+
+
+def search_albums_for_player(query, limit=5):
+    """Fast album search for Player's own main search box -- same
+    approach as search_albums() (match locally against MusicMind's
+    track-level album/artist columns, grouped, then resolve each
+    match's real Plex rating key via a targeted fetchItem() call), but
+    returns the {rating_key, title, artist, year} shape Browse's own
+    albumTile() renderer expects, rather than Share's
+    {content_ref, title, subtitle} shape. Kept as a separate function
+    rather than generalizing search_albums() itself -- that one is
+    proven and tested for Share; safer not to touch it for this.
+
+    Deliberately small limit (5, not search_albums()'s 8) -- this is a
+    "top album matches" section above the main track results, not a
+    paginated list of its own.
+
+    Returns None (caller falls back to no albums shown -- the main
+    live-Plex-backed track search still works either way) if MusicMind
+    isn't available or anything here fails."""
+    if not is_available():
+        return None
+
+    q_like = f"%{query.lower()}%"
+    try:
+        conn = _connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT album, artist, year, MIN(rating_key) AS sample_rating_key "
+                "FROM tracks WHERE LOWER(album) LIKE ? "
+                "GROUP BY album, artist LIMIT ?",
+                (q_like, limit),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+    results = []
+    try:
+        plex = plex_client.get_plex()
+    except Exception:
+        return None
+
+    for row in rows:
+        try:
+            sample_track = plex.fetchItem(int(row["sample_rating_key"]))
+            results.append({
+                "rating_key": sample_track.parentRatingKey,
+                "title": row["album"],
+                "artist": row["artist"],
+                "year": row["year"],
+            })
+        except Exception:
+            continue
+    return results

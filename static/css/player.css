@@ -802,6 +802,37 @@
   font-weight: 700;
 }
 
+/* --- A-Z quickbar (Browse pages) --- */
+.az-quickbar {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 2px;
+  z-index: 2;
+}
+.az-quickbar-letter {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  border: none;
+  background: none;
+  color: var(--pl-text-secondary);
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.az-quickbar-letter:hover,
+.az-quickbar-letter:active {
+  background: var(--pl-surface);
+  color: var(--pl-text);
+}
+
 @media (max-width: 600px) {
   .now-playing-bar {
     padding: 10px 14px;

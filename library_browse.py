@@ -34,6 +34,19 @@ def browse_artists_page(offset=0, limit=48, sort="title"):
     return result_cache.paged(_sort_artists(pool, sort), offset, limit)
 
 
+def artist_letter_offset(letter):
+    """Powers the A-Z quickbar for Browse Artists. Only meaningful for
+    the default title sort -- see result_cache.offset_for_letter()'s
+    own docstring for why."""
+    cache_key = ("browse_artists",)
+    pool = result_cache.cache_get(cache_key)
+    if pool is None:
+        pool = plex_client.list_all_artists()
+        result_cache.cache_set(cache_key, pool, ttl=POOL_TTL)
+    sorted_pool = _sort_artists(pool, "title")
+    return result_cache.offset_for_letter(sorted_pool, lambda a: a["title"], letter)
+
+
 def _sort_albums(pool, sort):
     if sort == "artist":
         return sorted(pool, key=lambda a: (a["artist"].lower(), a["title"].lower()))
@@ -51,3 +64,16 @@ def browse_albums_page(offset=0, limit=48, sort="title"):
         pool = plex_client.list_all_albums()
         result_cache.cache_set(cache_key, pool, ttl=POOL_TTL)
     return result_cache.paged(_sort_albums(pool, sort), offset, limit)
+
+
+def album_letter_offset(letter):
+    """Powers the A-Z quickbar for Browse Albums. Only meaningful for
+    the default title sort -- see result_cache.offset_for_letter()'s
+    own docstring for why."""
+    cache_key = ("browse_albums",)
+    pool = result_cache.cache_get(cache_key)
+    if pool is None:
+        pool = plex_client.list_all_albums()
+        result_cache.cache_set(cache_key, pool, ttl=POOL_TTL)
+    sorted_pool = _sort_albums(pool, "title")
+    return result_cache.offset_for_letter(sorted_pool, lambda a: a["title"], letter)

@@ -38,6 +38,12 @@
     <h2>Results</h2>
     <button id="clear-search-btn" class="pl-link-btn">✕ Clear</button>
   </div>
+  <div id="results-albums-section" hidden>
+    <div class="pl-section-header" style="margin-top:0;">
+      <h3 style="margin:0; font-size:16px;">Albums</h3>
+    </div>
+    <div id="results-albums-grid" class="browse-grid" style="margin-bottom: var(--pl-space-md);"></div>
+  </div>
   <div id="results-scroll" class="pl-results-scroll">
     <ul id="results-list" class="track-list"></ul>
   </div>
@@ -179,6 +185,32 @@ function trackRow(t, indexInAllLoaded) {
   return li;
 }
 
+function albumResultTile(a) {
+  const el = document.createElement("a");
+  el.className = "browse-tile";
+  el.href = `/browse/album/${a.rating_key}`;
+  const subtitle = [a.artist, a.year].filter(Boolean).join(" · ");
+  el.innerHTML = `
+    <img class="browse-tile-art" src="/art/${a.rating_key}" alt="" onerror="this.style.visibility='hidden'">
+    <div class="browse-tile-title">${a.title}</div>
+    <div class="browse-tile-subtitle">${subtitle}</div>
+  `;
+  return el;
+}
+
+function renderAlbumResults(albums) {
+  const section = document.getElementById("results-albums-section");
+  const grid = document.getElementById("results-albums-grid");
+  if (!albums || albums.length === 0) {
+    section.hidden = true;
+    grid.innerHTML = "";
+    return;
+  }
+  grid.innerHTML = "";
+  albums.forEach(a => grid.appendChild(albumResultTile(a)));
+  section.hidden = false;
+}
+
 function appendResultsPage(tracks, isFirstPage) {
   if (isFirstPage) {
     resultsList.innerHTML = "";
@@ -296,6 +328,7 @@ async function loadResultsPage(isFirstPage) {
 
   if (!isFirstPage) removeLoadingMore();
   appendResultsPage(data.results, isFirstPage);
+  if (isFirstPage) renderAlbumResults(data.albums);
   hasMoreResults = !!data.has_more;
   currentOffset = typeof data.next_offset === "number" ? data.next_offset : currentOffset + data.results.length;
   isLoadingResults = false;
@@ -309,6 +342,7 @@ function clearResults() {
   resultsSection.hidden = true;
   defaultView.hidden = false;
   document.getElementById("search-input").value = "";
+  document.getElementById("results-albums-section").hidden = true;
   currentQueryType = null;
   currentQueryValue = null;
 }

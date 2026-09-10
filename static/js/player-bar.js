@@ -178,6 +178,35 @@ window.MLPlayer = (function () {
     }
   }
 
+  function playNext(tracks) {
+    // Inserts right after the currently playing track, so it plays
+    // NEXT -- distinct from enqueue(), which appends to the end of
+    // the queue. If nothing is currently playing, there's nothing
+    // meaningful to insert "after" -- just start playing these tracks
+    // now, same fallback enqueue() already uses.
+    if (queueIndex === -1) {
+      playQueue(tracks, 0);
+      return;
+    }
+    queue.splice(queueIndex + 1, 0, ...tracks);
+    if (shuffleOn) {
+      // Shift existing shuffle-state indices that pointed past the
+      // insertion point, then place the newly-inserted tracks'
+      // indices at the FRONT of the remaining shuffle order -- so
+      // shuffle mode still honors "play next" rather than scattering
+      // them randomly. Same documented v1-limitation spirit as
+      // reorderQueue()'s own shuffle handling: correct for the common
+      // case, not claiming perfection for every edge case shuffle
+      // state could be in.
+      shuffleOrder = shuffleOrder.map(i => i > queueIndex ? i + tracks.length : i);
+      shuffleHistory = shuffleHistory.map(i => i > queueIndex ? i + tracks.length : i);
+      const newIndices = tracks.map((_, i) => queueIndex + 1 + i);
+      shuffleOrder = newIndices.concat(shuffleOrder);
+    }
+    updateNavButtons();
+    notifyChange();
+  }
+
   function playTrack(track) {
     playQueue([track], 0);
   }
@@ -478,7 +507,7 @@ window.MLPlayer = (function () {
   }
 
   return {
-    playTrack, playQueue, enqueue, pause, resume, isPaused, seekTo,
+    playTrack, playQueue, enqueue, playNext, pause, resume, isPaused, seekTo,
     getCurrent, getQueue, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
     jumpTo, removeFromQueue, reorderQueue, clearQueue,
     onChange, onEnded, onTimeUpdate, attemptAutoplay,

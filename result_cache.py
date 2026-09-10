@@ -50,3 +50,33 @@ def paged(all_results, offset, limit):
         "has_more": has_more,
         "next_offset": offset + len(page),
     }
+
+
+def offset_for_letter(sorted_pool, key_fn, letter):
+    """Given a pool already sorted by key_fn (ascending), finds the
+    index of the first item whose key starts with a character >= the
+    requested letter -- powers the Browse pages' A-Z quickbar jump.
+    Binary search rather than a linear scan, since these pools can run
+    into the thousands and this runs on every letter tap.
+
+    Deliberately only meaningful when the pool is sorted by the exact
+    field being jumped through (title, in every current caller) --
+    jumping through a differently-sorted pool (e.g. sorted by year)
+    wouldn't produce a meaningful letter-ordered position, so callers
+    only expose the quickbar when sort="title" is active.
+
+    "#" as `letter` jumps to the first non-letter-starting entry
+    (numbers, symbols) -- everything before 'A' in a naive string
+    comparison, which is exactly where those titles already sort to
+    under plain alphabetical ordering.
+    """
+    import bisect
+    letter = letter.upper()
+    if letter == "#":
+        for i, item in enumerate(sorted_pool):
+            k = key_fn(item)
+            if not k or not k[0].upper().isalpha():
+                return i
+        return len(sorted_pool)
+    keys = [key_fn(item).upper() for item in sorted_pool]
+    return bisect.bisect_left(keys, letter)

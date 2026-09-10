@@ -71,6 +71,30 @@ def api_tracks():
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
 
 
+@bp.route("/api/letter-offset")
+@admin_required
+def api_letter_offset():
+    """Powers the A-Z quickbar: given a browse type and a letter,
+    returns the offset where that letter's section begins in the
+    title-sorted pool, so the frontend can jump straight there rather
+    than loading every page in between."""
+    browse_type = request.args.get("type", "")
+    letter = request.args.get("letter", "").strip()
+    if browse_type not in ("artists", "albums", "tracks") or not letter:
+        return jsonify({"error": "Invalid type or letter."}), 400
+    try:
+        if browse_type == "artists":
+            offset = library_browse.artist_letter_offset(letter)
+        elif browse_type == "albums":
+            offset = library_browse.album_letter_offset(letter)
+        else:
+            offset = musicmind_bridge.track_letter_offset(letter)
+        return jsonify({"offset": offset})
+    except Exception:
+        current_app.logger.exception("Letter offset lookup failed for type=%r letter=%r", browse_type, letter)
+        return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
+
+
 @bp.route("/artist/<rating_key>")
 @admin_required
 def artist_detail(rating_key):
@@ -87,6 +111,26 @@ def artist_detail(rating_key):
         lastfm_active=_lastfm_active(),
         player_family=True,
     )
+
+
+@bp.route("/api/album-for-track/<rating_key>")
+@admin_required
+def api_album_for_track(rating_key):
+    """Resolves a track's parent album rating key -- powers "Go to
+    Album" from a track row. A JSON lookup rather than a redirecting
+    route deliberately: spa-nav.js's own fetch-based navigation
+    explicitly falls back to a full page reload whenever a fetch gets
+    redirected to a different path than requested (a safeguard for
+    expired-session-redirects-to-login), which would have caught this
+    too and defeated persistent playback on every album jump. Having
+    the frontend resolve the real album URL first and navigate
+    directly to it avoids a redirect entirely."""
+    try:
+        track = plex_client.get_plex().fetchItem(int(rating_key))
+        return jsonify({"album_rating_key": track.parentRatingKey})
+    except Exception:
+        current_app.logger.exception("api_album_for_track failed to resolve rating_key=%r", rating_key)
+        return jsonify({"error": "Couldn't find that track's album."}), 404
 
 
 @bp.route("/album/<rating_key>")
