@@ -33,6 +33,18 @@ MOOD_BUCKETS = {
     "dance": ["dance", "disco", "electronic"],
     "chill": ["chill", "ambient", "downtempo", "lounge"],
     "rock": ["rock"],
+    # Fallback Genres pill row, used only when MusicMind isn't
+    # available to provide the library's own real genre list (see
+    # musicmind_bridge.available_genres()). A few broad, generally-
+    # recognizable genres not already covered by the mood buckets
+    # above -- some natural overlap with "dance" (e.g. "electronic")
+    # is fine here, same as the existing buckets already have.
+    "pop": ["pop"],
+    "electronic": ["electronic", "edm", "techno", "house"],
+    "classical": ["classical"],
+    "hiphop": ["hip hop", "hip-hop", "rap"],
+    "country": ["country"],
+    "blues": ["blues"],
 }
 
 

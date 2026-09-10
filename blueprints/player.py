@@ -166,3 +166,41 @@ def api_content_tracks():
     except Exception:
         current_app.logger.exception("content-tracks resolver failed type=%r ref=%r", content_type, content_ref)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
+
+
+@bp.route("/api/player/genres")
+@admin_required
+def api_genres():
+    """Lists the library's most common genres for the Genres pill row,
+    sourced from MusicMind's own tracks.genre column when available.
+    Empty list (not an error) when MusicMind isn't configured -- the
+    frontend falls back to its own small hardcoded genre set rather
+    than showing nothing."""
+    try:
+        genres = musicmind_bridge.available_genres(top_n=12)
+        return jsonify({"genres": genres or []})
+    except Exception:
+        current_app.logger.exception("Genre list lookup failed")
+        return jsonify({"genres": []})
+
+
+@bp.route("/api/player/genre")
+@admin_required
+def api_genre():
+    """Paginated track browse for one genre. A query param, not a path
+    segment (unlike /api/player/mood/<mood_key>) -- real genre names
+    from MusicMind can contain "/" ("Pop/Rock") which would break a
+    path segment."""
+    genre = request.args.get("name", "")
+    if not genre:
+        return jsonify({"error": "Missing genre name."}), 400
+    offset = max(0, request.args.get("offset", 0, type=int) or 0)
+    limit = min(50, max(1, request.args.get("limit", 20, type=int) or 20))
+    try:
+        page = musicmind_bridge.tracks_by_genre_page(genre, offset=offset, limit=limit)
+        if page is None:
+            return jsonify({"error": "Genre browsing needs MusicMind, which isn't available right now."}), 502
+        return jsonify(page)
+    except Exception:
+        current_app.logger.exception("Genre browse failed for: %r", genre)
+        return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502

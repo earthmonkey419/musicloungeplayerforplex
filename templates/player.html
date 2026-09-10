@@ -18,7 +18,7 @@
     <button id="search-btn" class="pl-btn pl-btn-primary">Search</button>
   </div>
   <div id="mood-pills" class="pl-chip-row">
-    <span class="pl-chip-label">Popular genres</span>
+    <span class="pl-chip-label">Moods</span>
     <button class="mood-pill" data-mood="funk">Funk</button>
     <button class="mood-pill" data-mood="soul">Soul</button>
     <button class="mood-pill" data-mood="jazz">Jazz</button>
@@ -30,6 +30,9 @@
       <input type="checkbox" id="instrumental-only"> Instrumental only
     </label>
     {% endif %}
+  </div>
+  <div id="genre-pills" class="pl-chip-row">
+    <span class="pl-chip-label">Genres</span>
   </div>
 </section>
 
@@ -148,9 +151,15 @@ const atpPlaylistList = document.getElementById("atp-playlist-list");
 const atpNewName = document.getElementById("atp-new-name");
 let atpCurrentTrack = null;
 
+// --- Infinite-scroll search/mood results ---------------------------------
+// Ported from RiderMusic's proven pattern (ridermusic_guest.py): the
+// backend caches a full result pool per query and paginates it via
+// offset/limit; the frontend requests one page at a time and loads
+// more as the user scrolls, rather than one big unpaginated fetch.
+
 const RESULTS_PAGE_SIZE = 20;
 
-let currentQueryType = null;
+let currentQueryType = null;   // 'search', 'mood', or 'genre'
 let currentQueryValue = null;
 let currentMoodInstrumentalOnly = false;
 let currentOffset = 0;
@@ -158,7 +167,9 @@ let isLoadingResults = false;
 let hasMoreResults = false;
 let resultsObserver = null;
 let searchRequestId = 0;
-let allLoadedTracks = [];
+let allLoadedTracks = [];  // cumulative across pages, so Play/next-prev
+                           // work across everything loaded so far, not
+                           // just the most recent page
 
 function trackRow(t, indexInAllLoaded) {
   const li = document.createElement("li");
@@ -277,7 +288,12 @@ async function loadResultsPage(isFirstPage) {
   // Only pagination ("load more") respects this guard now -- a brand
   // new search (isFirstPage) always proceeds immediately and bumps
   // searchRequestId, so it correctly supersedes whatever's still in
-  // flight rather than being silently dropped by it.
+  // flight rather than being silently dropped by it. Previously ANY
+  // load in progress blocked a new search from even starting, which
+  // meant typing a second query while the first one's (slower)
+  // response was still pending just discarded the second query
+  // outright -- the exact "types something, sees stale/wrong results
+  // until pausing long enough to catch up" symptom.
   if (!isFirstPage && (!hasMoreResults || isLoadingResults)) return;
 
   const myRequestId = isFirstPage ? ++searchRequestId : searchRequestId;
@@ -304,6 +320,9 @@ async function loadResultsPage(isFirstPage) {
   if (currentQueryType === "search") {
     params.set("q", currentQueryValue);
     url = `/api/player/search?${params.toString()}`;
+  } else if (currentQueryType === "genre") {
+    params.set("name", currentQueryValue);
+    url = `/api/player/genre?${params.toString()}`;
   } else {
     if (currentMoodInstrumentalOnly) params.set("instrumental_only", "1");
     url = `/api/player/mood/${currentQueryValue}?${params.toString()}`;
@@ -347,6 +366,8 @@ function clearResults() {
   currentQueryValue = null;
 }
 
+// --- Back to top ------------------------------------------------------
+
 resultsScroll.addEventListener("scroll", () => {
   backToTopBtn.hidden = resultsScroll.scrollTop < 300;
 });
@@ -354,6 +375,8 @@ resultsScroll.addEventListener("scroll", () => {
 backToTopBtn.addEventListener("click", () => {
   resultsScroll.scrollTo({ top: 0, behavior: "smooth" });
 });
+
+// --- Add-to-playlist modal ------------------------------------------------
 
 function openAddToPlaylist(track) {
   atpCurrentTrack = track;
@@ -421,6 +444,8 @@ document.getElementById("atp-new-btn").addEventListener("click", () => {
     });
 });
 
+// --- Search / mood triggers ------------------------------------------
+
 function runSearch() {
   const q = document.getElementById("search-input").value.trim();
   if (!q) { clearResults(); return; }
@@ -441,6 +466,8 @@ document.getElementById("search-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") runSearch();
 });
 
+
+
 document.querySelectorAll(".mood-pill").forEach(btn => {
   btn.addEventListener("click", () => {
     const instrumentalOnlyEl = document.getElementById("instrumental-only");
@@ -450,6 +477,51 @@ document.querySelectorAll(".mood-pill").forEach(btn => {
     loadResultsPage(true);
   });
 });
+
+// --- Genre pills ---------------------------------------------------------
+// Sourced from MusicMind's own real genre list when available (a
+// clean, single value per track -- see musicmind_bridge.available_genres()'s
+// own docstring). Falls back to a small hardcoded set (using the same
+// mood-bucket keyword-matching mechanism as the pills above) when
+// MusicMind isn't connected, rather than showing an empty row.
+const genrePillsEl = document.getElementById("genre-pills");
+
+function addGenrePill(label, onClick) {
+  const btn = document.createElement("button");
+  btn.className = "mood-pill";
+  btn.textContent = label;
+  btn.addEventListener("click", onClick);
+  genrePillsEl.appendChild(btn);
+}
+
+fetch("/api/player/genres")
+  .then(r => r.json())
+  .then(data => {
+    const genres = data.genres || [];
+    if (genres.length > 0) {
+      genres.forEach(g => {
+        addGenrePill(g.genre, () => {
+          currentQueryType = "genre";
+          currentQueryValue = g.genre;
+          loadResultsPage(true);
+        });
+      });
+    } else {
+      // Fallback: a few broad genres via the existing mood-bucket
+      // mechanism, since MusicMind isn't available to provide the
+      // library's own real genre list.
+      [["pop", "Pop"], ["electronic", "Electronic"], ["classical", "Classical"],
+       ["hiphop", "Hip-Hop"], ["country", "Country"], ["blues", "Blues"]].forEach(([key, label]) => {
+        addGenrePill(label, () => {
+          currentQueryType = "mood";
+          currentQueryValue = key;
+          currentMoodInstrumentalOnly = false;
+          loadResultsPage(true);
+        });
+      });
+    }
+  })
+  .catch(() => { /* Genres row just stays empty -- not worth an error state for this. */ });
 
 document.getElementById("new-playlist-btn").addEventListener("click", () => {
   const name = prompt("Playlist name:");
@@ -466,6 +538,9 @@ document.getElementById("new-playlist-btn").addEventListener("click", () => {
     });
 });
 
+// Recently Played -- reads track data straight from the rendered
+// rows (same pattern as playlist_detail.html), building a queue so
+// prev/next work through the recently-played list too.
 document.querySelectorAll("#default-view .pl-recently-played .track-row").forEach((row, i, allRows) => {
   const tracks = Array.from(allRows).map(r => ({
     rating_key: r.dataset.ref,
@@ -480,6 +555,9 @@ document.querySelectorAll("#default-view .pl-recently-played .track-row").forEac
   });
 });
 
+// SPA-nav teardown -- disconnects the results IntersectionObserver
+// (if a search is active) before this page's content is swapped out,
+// so it doesn't keep firing against removed DOM nodes.
 window.__spaTeardown = function () {
   removeSentinel();
 };

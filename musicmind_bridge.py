@@ -149,6 +149,74 @@ def tracks_by_mood_page(mood_key, offset=0, limit=20, instrumental_only=False):
     return result_cache.paged(pool, offset, limit)
 
 
+def available_genres(top_n=12):
+    """The library's most common genres, straight from MusicMind's own
+    tracks.genre column -- a clean, single value per track (confirmed
+    directly: "Pop/Rock", "R&B", "Jazz", etc, an iTunes-style
+    taxonomy), unlike the mood buckets above, which keyword-match
+    against Plex's own often-messier genre tags. Returns
+    [{genre, count}] ordered by track count descending, capped at
+    top_n. Cached like every other library-wide pool here (the
+    ordering/counts don't change often enough to justify rebuilding on
+    every page load).
+
+    Returns None if MusicMind isn't available -- callers fall back to
+    a small hardcoded genre set instead of showing nothing."""
+    if not is_available():
+        return None
+    cache_key = ("available_genres",)
+    cached = result_cache.cache_get(cache_key)
+    if cached is not None:
+        return cached[:top_n]
+    try:
+        conn = _connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT genre, COUNT(*) AS cnt FROM tracks "
+                "WHERE genre IS NOT NULL AND genre != '' "
+                "GROUP BY genre ORDER BY cnt DESC"
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+    result = [{"genre": r["genre"], "count": r["cnt"]} for r in rows]
+    result_cache.cache_set(cache_key, result, ttl=result_cache._MOOD_CACHE_TTL)
+    return result[:top_n]
+
+
+def tracks_by_genre_page(genre, offset=0, limit=20):
+    """Paginated, cached track list for an EXACT genre match against
+    MusicMind's own tracks.genre column. Unlike mood buckets (which
+    keyword-match against several possible Plex genre tag spellings),
+    this is a direct equality match against MusicMind's own clean
+    value -- there's only ever one real spelling to match here.
+
+    Returns None if MusicMind isn't available."""
+    if not is_available():
+        return None
+    cache_key = ("genre_pool", genre.lower())
+    pool = result_cache.cache_get(cache_key)
+    if pool is None:
+        try:
+            conn = _connect()
+            try:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT rating_key, title, artist, album, duration_ms "
+                    "FROM tracks WHERE genre = ?",
+                    (genre,),
+                ).fetchall()
+            finally:
+                conn.close()
+        except Exception:
+            return None
+        pool = [t for t in (_row_to_track_dict(r) for r in rows) if t]
+        result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
+    return result_cache.paged(pool, offset, limit)
+
+
 def _filter_instrumental(tracks):
     rating_keys = [str(t["rating_key"]) for t in tracks]
     try:
