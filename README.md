@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="static/og-image.jpg" alt="MusicLounge Player" width="630">
+  <img src="static/og-image.jpg" alt="MusicLounge Player" width="480">
 </p>
 
 <h1 align="center">MusicLounge Player</h1>
@@ -16,16 +16,18 @@ It also includes two social listening modes, launched right from the player:
 
 ## Features
 
-- **Search** your whole library, with fast infinite-scroll results
-- **Browse** by Artist or Album, with sort (name, recently added, year, artist)
+- **Search** your whole library, with fast infinite-scroll results — a "top matches" row of album results appears above tracks when relevant
+- **Browse** by Artist, Album, or Track, with sort (name, recently added, year, artist), plus an A-Z quickbar to jump straight to a letter in long lists
 - **Playlists** — build native playlists, or sync existing Plex playlists (synced ones stay read-only and always current)
+- **One shared "⋯" menu** on any track, album, or playlist — Play Next, Add to Queue, Add to Playlist, Start a Room, Share a Link, or (from a track) jump to its Album
 - **Persistent queue** — survives page reloads and navigation, with a real editable queue view (reorder, remove, jump-to-track)
 - **Recently Played**, logged automatically once a track has genuinely been listened to (skips don't count)
-- **Expanded Now Playing view** — tap the mini-player for large art, a real scrub bar, and full transport controls
+- **Expanded Now Playing view** — tap the mini-player for large art, a real scrub bar, full transport controls, and a proper side-by-side layout in landscape
 - **Last.fm scrobbling** — connect once in Settings, then now-playing and scrobbles happen automatically
 - **Room Mode** — shared queue, one now-playing, join by QR code or short code
-- **Share Mode** — private links with configurable expiry, optional email delivery
+- **Share Mode** — private links with configurable expiry, optional email delivery (with an embedded thumbnail)
 - **Installable PWA** — add to your phone's home screen for a real app icon and standalone (no browser chrome) experience
+- **AirPlay support** on iOS — works out of the box via Safari's own audio route picker, no extra setup
 - Persistent playback across navigation — the audio never stops just because you clicked something
 
 ## Screenshots
@@ -70,7 +72,7 @@ pip install -r requirements.txt
 cp config.example.py config.py
 # edit config.py directly, or set the same values as environment variables
 python init_db.py
-gunicorn -w 2 --threads 4 --worker-class gthread -b 0.0.0.0:8680 app:app
+gunicorn -w 1 --threads 4 --worker-class gthread -b 0.0.0.0:8680 app:app
 ```
 
 A process manager (PM2, systemd, supervisord) is recommended for keeping it running — see `ecosystem.config.cjs` for a working PM2 example.
@@ -90,12 +92,16 @@ Every setting is documented in `config.example.py`. The essentials:
 Optional integrations (fully functional with nothing else configured; these just add more):
 
 - **Last.fm scrobbling** — `LASTFM_API_KEY` / `LASTFM_API_SECRET` ([get a key](https://www.last.fm/api/account/create)), then connect your account once from Settings
-- **MusicMind bridge** — `MUSICMIND_DB_PATH`, an optional read-only companion database for faster/enriched mood-based browsing
+- **MusicMind bridge** — `MUSICMIND_DB_PATH`, an optional read-only companion database. Fully optional (everything falls back to live Plex queries with no missing functionality), but when connected it meaningfully accelerates search, mood/genre browsing, and Track browsing — MusicMind's own real genre data also powers the Genres pill row on the search page.
 - **SMTP** — for emailing Share Mode links directly instead of just copying them
 
 ## Architecture notes
 
 This is a single-admin, browser-based tool — there's no multi-user account system, by design. Anyone with the admin password has full access; anyone with a Room join code or Share link gets the scoped, guest-facing experience for that session only.
+
+## Known limitations
+
+- **Installed PWA + backgrounding:** if you add Player to your home screen (iOS) and background it mid-queue, the *current* track keeps playing, but it won't automatically advance to the next one until you bring the app back to the foreground — confirmed to be iOS suspending the installed PWA's JavaScript more aggressively than a regular browser tab (a plain Safari/Chrome tab doesn't have this gap). If gapless background listening through a long queue matters more to you than the home-screen app feel, use it as a regular browser tab instead.
 
 ## License
 
