@@ -30,11 +30,25 @@
     const albumBtn = item.type === "track"
       ? '<button class="room-share-popover-item" data-action="album">💿 Go to Album</button>'
       : "";
+    const enqueueBtn = item.type === "track"
+      ? '<button class="room-share-popover-item" data-action="enqueue">⏬ Add to Queue</button>'
+      : "";
+    // Defensive: openAddToPlaylist() is defined locally per-template
+    // (Browse, Player, Album detail, Plex playlist detail) and
+    // exposed on window by each -- native Playlist detail doesn't
+    // define it at all (you can't add a track that's already in this
+    // playlist to itself), so this option only appears where the
+    // function actually exists rather than throwing when clicked.
+    const addPlaylistBtn = item.type === "track" && typeof window.openAddToPlaylist === "function"
+      ? '<button class="room-share-popover-item" data-action="addplaylist">➕ Add to Playlist</button>'
+      : "";
 
     const menu = document.createElement("div");
     menu.className = "room-share-popover";
     menu.innerHTML = `
       <button class="room-share-popover-item" data-action="playnext">⏭ Play Next</button>
+      ${enqueueBtn}
+      ${addPlaylistBtn}
       <button class="room-share-popover-item" data-action="room">📡 Start a Room</button>
       <button class="room-share-popover-item" data-action="share">🔗 Share a Link</button>
       ${albumBtn}
@@ -55,6 +69,23 @@
       statusEl.hidden = false;
       statusEl.textContent = text;
       statusEl.style.color = isError ? "var(--pl-red)" : "var(--pl-text)";
+    }
+
+    const enqueueTrigger = menu.querySelector('[data-action="enqueue"]');
+    if (enqueueTrigger) {
+      enqueueTrigger.addEventListener("click", () => {
+        MLPlayer.enqueue({ rating_key: item.ref, title: item.title, artist: item.artist });
+        showStatus("Added to queue!");
+        setTimeout(closeMenu, 900);
+      });
+    }
+
+    const addPlaylistTrigger = menu.querySelector('[data-action="addplaylist"]');
+    if (addPlaylistTrigger) {
+      addPlaylistTrigger.addEventListener("click", () => {
+        closeMenu();
+        window.openAddToPlaylist({ rating_key: item.ref, title: item.title, artist: item.artist });
+      });
     }
 
     menu.querySelector('[data-action="playnext"]').addEventListener("click", () => {

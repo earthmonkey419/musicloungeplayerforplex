@@ -104,6 +104,7 @@ function openAddToPlaylist(track) {
   renderPlaylistPickerList();
   atpModal.hidden = false;
 }
+window.openAddToPlaylist = openAddToPlaylist;
 function closeAddToPlaylist() { atpModal.hidden = true; atpCurrentTrack = null; }
 
 function renderPlaylistPickerList() {

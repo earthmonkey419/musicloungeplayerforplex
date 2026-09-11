@@ -849,4 +849,14 @@
   .np-btn-play { width: 32px; height: 32px; }
   .np-btn-play .np-icon { width: 16px; height: 16px; }
   .np-volume-wrap { display: none; }
+
+  /* Track rows: up to 4 action buttons (play/enqueue/add/room-share)
+     plus 44px art left almost no room for the title on a narrow
+     phone screen -- confirmed directly via real mobile screenshots,
+     titles were truncating to a handful of characters. Enqueue and
+     Add-to-playlist fold into the existing ⋯ popover on mobile only
+     (see room-share-menu.js) -- Play and the popover stay as the two
+     primary, always-visible actions; desktop keeps all four buttons
+     as before. */
+  .track-enqueue, .track-add { display: none; }
 }
