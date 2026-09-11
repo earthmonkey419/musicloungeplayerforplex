@@ -164,6 +164,26 @@
 .mood-pill-active:hover { background: var(--pl-teal); color: #FFF8E9; }
 .mood-instrumental-toggle { font-size: 13px; color: var(--pl-text-secondary); display: flex; align-items: center; gap: 6px; }
 
+.tag-explore-wrap { flex: 1 1 200px; min-width: 140px; max-width: 320px; }
+#tag-input {
+  width: 100%;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 8px 14px;
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  background: #FFF8E9;
+  color: var(--pl-teal);
+}
+#tag-input.tag-input-invalid {
+  border-color: var(--pl-red, #E8543F);
+  animation: tag-input-shake 0.3s;
+}
+@keyframes tag-input-shake {
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
 .pl-btn {
   display: inline-flex;
   align-items: center;

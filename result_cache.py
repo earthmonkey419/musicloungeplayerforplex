@@ -11,6 +11,7 @@ again.
 NOTE: this is a plain in-process dict, assumes a single gunicorn
 worker (mlplayer's ecosystem.config.cjs runs it that way).
 """
+import random
 import time
 
 _RESULT_CACHE = {}
@@ -49,6 +50,35 @@ def paged(all_results, offset, limit):
         "results": page,
         "has_more": has_more,
         "next_offset": offset + len(page),
+    }
+
+
+def paged_shuffled(all_results, offset, limit, seed=None):
+    """Same as paged(), but pages through a shuffled copy of the pool
+    instead of its natural order -- powers mood/genre browsing
+    returning different tracks on repeat clicks, without the
+    underlying (expensive-to-build) pool itself needing to change.
+
+    seed=None means "start a new shuffle": a fresh random seed is
+    generated and returned in the response. The caller (frontend)
+    threads that same seed back on subsequent "load more" pagination
+    calls within the same browse session, so random.Random(seed)
+    deterministically reproduces the identical shuffled order each
+    time -- pagination stays correct (no duplicate or skipped tracks
+    as the user scrolls) even though the order itself is random.
+    A fresh pill click / new Explore submission omits the seed again,
+    getting a genuinely new shuffle."""
+    if seed is None:
+        seed = random.randint(0, 2**31 - 1)
+    shuffled = list(all_results)
+    random.Random(seed).shuffle(shuffled)
+    page = shuffled[offset:offset + limit]
+    has_more = (offset + limit) < len(shuffled)
+    return {
+        "results": page,
+        "has_more": has_more,
+        "next_offset": offset + len(page),
+        "seed": seed,
     }
 
 

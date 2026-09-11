@@ -140,63 +140,78 @@ def _build_mood_pool(mood_key, instrumental_only):
     return pool
 
 
-def tracks_by_mood_page(mood_key, offset=0, limit=20, instrumental_only=False):
+def tracks_by_mood_page(mood_key, offset=0, limit=20, instrumental_only=False, shuffle_seed=None):
+    """Cached, paginated mood-bucket lookup. The cached pool is the
+    same every time, but paged_shuffled() pages through a shuffled
+    copy of it, so repeat clicks surface different tracks while
+    "load more" within one click still pages correctly with no
+    duplicates (see its own docstring)."""
     cache_key = ("mood", mood_key.lower(), instrumental_only)
     pool = result_cache.cache_get(cache_key)
     if pool is None:
         pool = _build_mood_pool(mood_key, instrumental_only)
         result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
-    return result_cache.paged(pool, offset, limit)
+    return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed)
 
 
-def available_genres(top_n=12):
-    """The library's most common genres, straight from MusicMind's own
-    tracks.genre column -- a clean, single value per track (confirmed
-    directly: "Pop/Rock", "R&B", "Jazz", etc, an iTunes-style
-    taxonomy), unlike the mood buckets above, which keyword-match
-    against Plex's own often-messier genre tags. Returns
-    [{genre, count}] ordered by track count descending, capped at
-    top_n. Cached like every other library-wide pool here (the
-    ordering/counts don't change often enough to justify rebuilding on
-    every page load).
+def available_tags(min_count=21):
+    """The library's most common, reliable tags from MusicMind's
+    track_tags table -- far more granular than tracks.genre's 17
+    broad categories (confirmed directly against real data: track_tags
+    has entries like "new wave" (4,364 tracks), "synth-pop",
+    "post-punk", "psychedelic rock" -- exactly the kind of specific
+    genre the broad genre field collapses into "Pop/Rock"). Mood/
+    energy descriptors ("upbeat", "nostalgic", "melodic") live in this
+    same table with no distinguishing column -- confirmed directly,
+    both kinds show up mixed in the top results. Returning both
+    together, not trying to separate them, is a deliberate scoping
+    decision (discussed and confirmed), not an oversight.
 
-    Returns None if MusicMind isn't available -- callers fall back to
-    a small hardcoded genre set instead of showing nothing."""
+    min_count filters the long tail: confirmed directly that
+    track_tags has thousands of distinct tags total, but the vast
+    majority are noisy, one-off AI-tagging quirks (occurring only a
+    handful of times) rather than reliable descriptors -- around 600
+    tags clear a 21-occurrence bar. Cached like every other
+    library-wide pool here.
+
+    Returns None if MusicMind isn't available."""
     if not is_available():
         return None
-    cache_key = ("available_genres",)
+    cache_key = ("available_tags", min_count)
     cached = result_cache.cache_get(cache_key)
     if cached is not None:
-        return cached[:top_n]
+        return cached
     try:
         conn = _connect()
         try:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT genre, COUNT(*) AS cnt FROM tracks "
-                "WHERE genre IS NOT NULL AND genre != '' "
-                "GROUP BY genre ORDER BY cnt DESC"
+                "SELECT tag, COUNT(*) AS cnt FROM track_tags "
+                "GROUP BY tag HAVING cnt >= ? ORDER BY cnt DESC",
+                (min_count,),
             ).fetchall()
         finally:
             conn.close()
     except Exception:
         return None
-    result = [{"genre": r["genre"], "count": r["cnt"]} for r in rows]
+    result = [{"tag": r["tag"], "count": r["cnt"]} for r in rows]
     result_cache.cache_set(cache_key, result, ttl=result_cache._MOOD_CACHE_TTL)
-    return result[:top_n]
+    return result
 
 
-def tracks_by_genre_page(genre, offset=0, limit=20):
-    """Paginated, cached track list for an EXACT genre match against
-    MusicMind's own tracks.genre column. Unlike mood buckets (which
-    keyword-match against several possible Plex genre tag spellings),
-    this is a direct equality match against MusicMind's own clean
-    value -- there's only ever one real spelling to match here.
+def tracks_by_tag_page(tag, offset=0, limit=20, shuffle_seed=None):
+    """Paginated, cached track list for an exact tag match against
+    MusicMind's own track_tags table (joined back to tracks for the
+    actual track data). track_tags has a UNIQUE(rating_key, tag)
+    constraint, so this join can't produce duplicate rows for a single
+    tag query. Pages through a shuffled copy of the cached pool (see
+    result_cache.paged_shuffled()'s own docstring) so repeat Explore
+    submissions for the same tag surface different tracks.
 
     Returns None if MusicMind isn't available."""
     if not is_available():
         return None
-    cache_key = ("genre_pool", genre.lower())
+    cache_key = ("tag_pool", tag.lower())
     pool = result_cache.cache_get(cache_key)
     if pool is None:
         try:
@@ -204,9 +219,10 @@ def tracks_by_genre_page(genre, offset=0, limit=20):
             try:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
-                    "SELECT rating_key, title, artist, album, duration_ms "
-                    "FROM tracks WHERE genre = ?",
-                    (genre,),
+                    "SELECT t.rating_key, t.title, t.artist, t.album, t.duration_ms "
+                    "FROM tracks t JOIN track_tags tt ON tt.rating_key = t.rating_key "
+                    "WHERE tt.tag = ?",
+                    (tag,),
                 ).fetchall()
             finally:
                 conn.close()
@@ -214,7 +230,7 @@ def tracks_by_genre_page(genre, offset=0, limit=20):
             return None
         pool = [t for t in (_row_to_track_dict(r) for r in rows) if t]
         result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
-    return result_cache.paged(pool, offset, limit)
+    return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed)
 
 
 def _filter_instrumental(tracks):

@@ -135,9 +135,11 @@ def api_mood(mood_key):
     offset = max(0, request.args.get("offset", 0, type=int) or 0)
     limit = min(50, max(1, request.args.get("limit", 20, type=int) or 20))
     instrumental_only = request.args.get("instrumental_only") == "1"
+    shuffle_seed = request.args.get("seed", type=int)
     try:
         page = musicmind_bridge.tracks_by_mood_page(
-            mood_key, offset=offset, limit=limit, instrumental_only=instrumental_only
+            mood_key, offset=offset, limit=limit, instrumental_only=instrumental_only,
+            shuffle_seed=shuffle_seed,
         )
         return jsonify(page)
     except Exception:
@@ -168,39 +170,44 @@ def api_content_tracks():
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
 
 
-@bp.route("/api/player/genres")
+@bp.route("/api/player/tags")
 @admin_required
-def api_genres():
-    """Lists the library's most common genres for the Genres pill row,
-    sourced from MusicMind's own tracks.genre column when available.
-    Empty list (not an error) when MusicMind isn't configured -- the
-    frontend falls back to its own small hardcoded genre set rather
-    than showing nothing."""
+def api_tags():
+    """Lists the library's reliable tags for the predictive-typing
+    tags field, sourced from MusicMind's track_tags table when
+    available -- far more granular than the old tracks.genre-based
+    version (confirmed directly against real data: "new wave" alone
+    has 4,364 tagged tracks, vs. tracks.genre's 17 broad categories
+    that would have folded it into "Pop/Rock"). Genre-like and mood/
+    energy-like tags aren't distinguished in track_tags, so both come
+    back together -- a deliberate scoping decision. Empty list (not
+    an error) when MusicMind isn't configured -- the frontend falls
+    back to its own small hardcoded set rather than showing nothing."""
     try:
-        genres = musicmind_bridge.available_genres(top_n=12)
-        return jsonify({"genres": genres or []})
+        tags = musicmind_bridge.available_tags()
+        return jsonify({"tags": tags or []})
     except Exception:
-        current_app.logger.exception("Genre list lookup failed")
-        return jsonify({"genres": []})
+        current_app.logger.exception("Tag list lookup failed")
+        return jsonify({"tags": []})
 
 
-@bp.route("/api/player/genre")
+@bp.route("/api/player/tag")
 @admin_required
-def api_genre():
-    """Paginated track browse for one genre. A query param, not a path
-    segment (unlike /api/player/mood/<mood_key>) -- real genre names
-    from MusicMind can contain "/" ("Pop/Rock") which would break a
-    path segment."""
-    genre = request.args.get("name", "")
-    if not genre:
-        return jsonify({"error": "Missing genre name."}), 400
+def api_tag():
+    """Paginated track browse for one tag. A query param, not a path
+    segment -- tag values can contain "/" or other characters that
+    would break a path segment."""
+    tag = request.args.get("name", "")
+    if not tag:
+        return jsonify({"error": "Missing tag name."}), 400
     offset = max(0, request.args.get("offset", 0, type=int) or 0)
     limit = min(50, max(1, request.args.get("limit", 20, type=int) or 20))
+    shuffle_seed = request.args.get("seed", type=int)
     try:
-        page = musicmind_bridge.tracks_by_genre_page(genre, offset=offset, limit=limit)
+        page = musicmind_bridge.tracks_by_tag_page(tag, offset=offset, limit=limit, shuffle_seed=shuffle_seed)
         if page is None:
-            return jsonify({"error": "Genre browsing needs MusicMind, which isn't available right now."}), 502
+            return jsonify({"error": "Tag browsing needs MusicMind, which isn't available right now."}), 502
         return jsonify(page)
     except Exception:
-        current_app.logger.exception("Genre browse failed for: %r", genre)
+        current_app.logger.exception("Tag browse failed for: %r", tag)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502

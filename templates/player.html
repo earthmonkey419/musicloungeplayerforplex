@@ -31,8 +31,13 @@
     </label>
     {% endif %}
   </div>
-  <div id="genre-pills" class="pl-chip-row">
-    <span class="pl-chip-label">Genres</span>
+  <div id="tag-explore-row" class="pl-chip-row">
+    <span class="pl-chip-label">Tags</span>
+    <div class="tag-explore-wrap">
+      <input id="tag-input" type="text" list="tag-options" placeholder="Type a tag…" autocomplete="off">
+      <datalist id="tag-options"></datalist>
+    </div>
+    <button id="tag-explore-btn" class="pl-btn pl-btn-mint">Explore</button>
   </div>
 </section>
 
@@ -159,9 +164,16 @@ let atpCurrentTrack = null;
 
 const RESULTS_PAGE_SIZE = 20;
 
-let currentQueryType = null;   // 'search', 'mood', or 'genre'
+let currentQueryType = null;   // 'search', 'mood', or 'tag'
 let currentQueryValue = null;
 let currentMoodInstrumentalOnly = false;
+let currentShuffleSeed = null; // reset on every fresh mood/tag browse
+                                // (isFirstPage); threaded through
+                                // "load more" pagination so the same
+                                // browse session pages correctly with
+                                // no duplicates, while a fresh pill
+                                // click or Explore submission starts
+                                // a genuinely new shuffle.
 let currentOffset = 0;
 let isLoadingResults = false;
 let hasMoreResults = false;
@@ -304,6 +316,7 @@ async function loadResultsPage(isFirstPage) {
 
   if (isFirstPage) {
     currentOffset = 0;
+    currentShuffleSeed = null; // fresh browse -- always start a new shuffle
     removeSentinel();
     resultsList.innerHTML = '<li class="empty">Searching…</li>';
     resultsScroll.scrollTop = 0;
@@ -320,11 +333,13 @@ async function loadResultsPage(isFirstPage) {
   if (currentQueryType === "search") {
     params.set("q", currentQueryValue);
     url = `/api/player/search?${params.toString()}`;
-  } else if (currentQueryType === "genre") {
+  } else if (currentQueryType === "tag") {
     params.set("name", currentQueryValue);
-    url = `/api/player/genre?${params.toString()}`;
+    if (currentShuffleSeed !== null) params.set("seed", String(currentShuffleSeed));
+    url = `/api/player/tag?${params.toString()}`;
   } else {
     if (currentMoodInstrumentalOnly) params.set("instrumental_only", "1");
+    if (currentShuffleSeed !== null) params.set("seed", String(currentShuffleSeed));
     url = `/api/player/mood/${currentQueryValue}?${params.toString()}`;
   }
 
@@ -348,6 +363,7 @@ async function loadResultsPage(isFirstPage) {
   if (!isFirstPage) removeLoadingMore();
   appendResultsPage(data.results, isFirstPage);
   if (isFirstPage) renderAlbumResults(data.albums);
+  if (typeof data.seed === "number") currentShuffleSeed = data.seed;
   hasMoreResults = !!data.has_more;
   currentOffset = typeof data.next_offset === "number" ? data.next_offset : currentOffset + data.results.length;
   isLoadingResults = false;
@@ -364,6 +380,7 @@ function clearResults() {
   document.getElementById("results-albums-section").hidden = true;
   currentQueryType = null;
   currentQueryValue = null;
+  currentShuffleSeed = null;
 }
 
 // --- Back to top ------------------------------------------------------
@@ -479,50 +496,68 @@ document.querySelectorAll(".mood-pill").forEach(btn => {
   });
 });
 
-// --- Genre pills ---------------------------------------------------------
-// Sourced from MusicMind's own real genre list when available (a
-// clean, single value per track -- see musicmind_bridge.available_genres()'s
-// own docstring). Falls back to a small hardcoded set (using the same
-// mood-bucket keyword-matching mechanism as the pills above) when
-// MusicMind isn't connected, rather than showing an empty row.
-const genrePillsEl = document.getElementById("genre-pills");
+// --- Tag explore (predictive-typing field + button) ----------------------
+// Sourced from MusicMind's track_tags table when available -- far
+// more granular than an earlier version based on tracks.genre's 17
+// broad categories (confirmed directly against real data: "new wave"
+// alone has 4,364 tagged tracks, which the broad genre field would
+// have folded into "Pop/Rock"). Genre-like and mood/energy-like tags
+// aren't distinguished in track_tags, so both come back together --
+// a deliberate scoping decision, not an oversight. Falls back to a
+// small hardcoded set (routed through the existing mood-bucket
+// mechanism) when MusicMind isn't connected. A native <datalist>
+// gives real predictive-typing suggestions without any custom
+// filtering logic. tagLookup maps the lowercased label the user might
+// type to {type, value} so Explore knows whether to route through
+// /api/player/tag (MusicMind) or /api/player/mood (fallback) --
+// transparent to the user either way.
+const tagInputEl = document.getElementById("tag-input");
+const tagOptionsEl = document.getElementById("tag-options");
+const tagExploreBtn = document.getElementById("tag-explore-btn");
+const tagLookup = new Map();
 
-function addGenrePill(label, onClick) {
-  const btn = document.createElement("button");
-  btn.className = "mood-pill";
-  btn.textContent = label;
-  btn.addEventListener("click", onClick);
-  genrePillsEl.appendChild(btn);
-}
-
-fetch("/api/player/genres")
+fetch("/api/player/tags")
   .then(r => r.json())
   .then(data => {
-    const genres = data.genres || [];
-    if (genres.length > 0) {
-      genres.forEach(g => {
-        addGenrePill(g.genre, () => {
-          currentQueryType = "genre";
-          currentQueryValue = g.genre;
-          loadResultsPage(true);
-        });
-      });
-    } else {
-      // Fallback: a few broad genres via the existing mood-bucket
-      // mechanism, since MusicMind isn't available to provide the
-      // library's own real genre list.
-      [["pop", "Pop"], ["electronic", "Electronic"], ["classical", "Classical"],
-       ["hiphop", "Hip-Hop"], ["country", "Country"], ["blues", "Blues"]].forEach(([key, label]) => {
-        addGenrePill(label, () => {
-          currentQueryType = "mood";
-          currentQueryValue = key;
-          currentMoodInstrumentalOnly = false;
-          loadResultsPage(true);
-        });
-      });
-    }
+    const tags = data.tags || [];
+    const entries = tags.length > 0
+      ? tags.map(t => [t.tag, { type: "tag", value: t.tag }])
+      : [
+          ["Pop", { type: "mood", value: "pop" }],
+          ["Electronic", { type: "mood", value: "electronic" }],
+          ["Classical", { type: "mood", value: "classical" }],
+          ["Hip-Hop", { type: "mood", value: "hiphop" }],
+          ["Country", { type: "mood", value: "country" }],
+          ["Blues", { type: "mood", value: "blues" }],
+        ];
+    entries.forEach(([label, routing]) => {
+      const option = document.createElement("option");
+      option.value = label;
+      tagOptionsEl.appendChild(option);
+      tagLookup.set(label.toLowerCase(), routing);
+    });
   })
-  .catch(() => { /* Genres row just stays empty -- not worth an error state for this. */ });
+  .catch(() => { /* Field just has no suggestions -- not worth an error state for this. */ });
+
+function runTagExplore() {
+  const typed = tagInputEl.value.trim();
+  if (!typed) return;
+  const routing = tagLookup.get(typed.toLowerCase());
+  if (!routing) {
+    tagInputEl.classList.add("tag-input-invalid");
+    setTimeout(() => tagInputEl.classList.remove("tag-input-invalid"), 1200);
+    return;
+  }
+  currentQueryType = routing.type;
+  currentQueryValue = routing.value;
+  currentMoodInstrumentalOnly = false;
+  loadResultsPage(true);
+}
+
+tagExploreBtn.addEventListener("click", runTagExplore);
+tagInputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") runTagExplore();
+});
 
 document.getElementById("new-playlist-btn").addEventListener("click", () => {
   const name = prompt("Playlist name:");
