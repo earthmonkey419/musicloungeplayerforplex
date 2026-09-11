@@ -649,9 +649,10 @@
   z-index: 30;
   background: var(--pl-teal, #173B3A);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: var(--pl-space-lg);
+  overflow-y: auto;
 }
 .npx-overlay[hidden] { display: none; }
 
@@ -663,11 +664,33 @@
   align-items: center;
   color: #FFF8E9;
   position: relative;
+  margin: auto 0; /* centers vertically when it fits; naturally
+                     collapses to top-aligned + scrollable when it
+                     doesn't (e.g. landscape's much shorter viewport
+                     height) -- confirmed the previous align-items:
+                     center on the overlay alone cut off the bottom
+                     half (the actual transport controls) in
+                     landscape, since .npx-art's size only accounted
+                     for viewport WIDTH, not height. */
+}
+
+/* Wraps title/artist/progress/controls as one unit -- exists purely
+   so the landscape media query below can lay .npx-art and this
+   whole group out side-by-side, matching how native media players
+   typically use landscape's extra width instead of just cramming a
+   portrait layout into a short viewport. Base rule here reproduces
+   .npx-panel's own original column/center styling exactly, so
+   portrait is visually unchanged by this wrapper's existence. */
+.npx-details {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .npx-art {
-  width: min(320px, 70vw);
-  height: min(320px, 70vw);
+  width: min(320px, 70vw, 38vh);
+  height: min(320px, 70vw, 38vh);
   border-radius: var(--pl-radius-md);
   object-fit: cover;
   background: rgba(255,248,233,0.1);
@@ -859,4 +882,37 @@
      primary, always-visible actions; desktop keeps all four buttons
      as before. */
   .track-enqueue, .track-add { display: none; }
+}
+
+/* Expanded Now Playing view, landscape: side-by-side (art left,
+   details right) rather than the portrait vertical stack -- matches
+   how native media players typically use landscape's extra width.
+   max-height gate (not just orientation) so this only kicks in on
+   phones actually short enough to need it, not landscape tablets
+   with plenty of vertical room. Confirmed via real device screenshots
+   that without this, the vertical stack's transport controls got
+   pushed off the bottom of a short landscape viewport (see .npx-art's
+   own height-aware sizing fix above, which handles the "still
+   readable at all" case -- this one is the better UX layered on top,
+   not a replacement for it). */
+@media (orientation: landscape) and (max-height: 500px) {
+  .npx-panel {
+    flex-direction: row;
+    align-items: center;
+    max-width: 700px;
+    gap: var(--pl-space-lg);
+  }
+  .npx-art {
+    width: min(200px, 30vw, 70vh);
+    height: min(200px, 30vw, 70vh);
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .npx-details {
+    flex: 1;
+    min-width: 0;
+    align-items: flex-start;
+  }
+  .npx-title, .npx-artist { text-align: left; }
+  .npx-controls { justify-content: flex-start; }
 }
