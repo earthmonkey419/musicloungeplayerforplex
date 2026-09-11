@@ -23,7 +23,7 @@ Each deployment (musiclounge.vp-fun.com and mlplayer.vp-fun.com) runs
 its own independent instance/DB of this code; they don't talk to
 each other at runtime.
 """
-from flask import Flask
+from flask import Flask, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime
 import config
@@ -58,20 +58,31 @@ def create_app():
 
     @app.after_request
     def no_store(response):
-        # Deliberately unconditional -- ALWAYS overwrite whatever
-        # Cache-Control is already present, including Flask's own
-        # default for static files (Cache-Control: max-age=14400, a
-        # full 4 hours). That default meant every JS/CSS fix deployed
-        # here could take up to 4 hours to actually reach a real
-        # browser, independent of pm2 restart (only affects the
-        # origin, not Cloudflare's edge cache) and not fixed by a hard
-        # refresh either (only bypasses the browser's own cache, not
-        # Cloudflare's). Confirmed directly: curl -I .../player-bar.js
-        # showed cf-cache-status: REVALIDATED with that same 14400s
-        # max-age, actively causing real "nothing changed" confusion
-        # during tonight's own debugging.
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
+        # Scoped to /static/ specifically now, not fully unconditional
+        # anymore -- an earlier version of this fix applied
+        # unconditionally to EVERY response, which fixed the original
+        # problem (Flask's own default Cache-Control: max-age=14400 on
+        # static JS/CSS meant deploys could take 4 hours to actually
+        # reach a browser, confirmed via cf-cache-status: REVALIDATED)
+        # but broke something else: it also silently overwrote
+        # room.art()'s own deliberate Cache-Control: public,
+        # max-age=86400, which Share's email thumbnails depend on --
+        # email clients' link-preview crawlers generally need a real,
+        # cacheable directive to reliably fetch and display a preview
+        # image, and got no-store instead. Confirmed directly:
+        # /art/<rating_key> was returning no-store despite explicitly
+        # setting its own header, silently breaking Share email
+        # thumbnails as a result. Static files still need the forced
+        # override (Flask sets their Cache-Control before any route
+        # code runs, so there's no "route deliberately chose this"
+        # signal to respect there); every other route's own explicit
+        # Cache-Control is now left alone.
+        if request.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        elif "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
         return response
 
     return app

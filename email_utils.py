@@ -10,11 +10,20 @@ from email.mime.multipart import MIMEMultipart
 import config
 
 
-def send_share_email(to_email, share_url, content_title, from_display_name):
+def send_share_email(to_email, share_url, content_title, from_display_name, art_url=None):
     """Sends the share link. From address stays fixed/domain-verified
     (config.SMTP_FROM_ADDRESS) -- only the display name is admin-
     editable per share, matching the scope doc's reasoning about why
-    a fully arbitrary From address isn't offered."""
+    a fully arbitrary From address isn't offered.
+
+    art_url is optional and, when given, embeds a thumbnail image at
+    the top of the HTML body -- matching the pattern MusicLounge
+    Jukebox (a sibling product, separate codebase) already has, which
+    Player's own version of this email never actually included. Takes
+    a fully-formed absolute URL rather than a rating_key, so this
+    module doesn't need any awareness of Flask's request context or
+    url_for -- the caller (share.py, which already builds share_url
+    the same way) constructs it."""
     display_name = from_display_name or config.SMTP_FROM_DISPLAY_NAME
 
     msg = MIMEMultipart("alternative")
@@ -27,8 +36,14 @@ def send_share_email(to_email, share_url, content_title, from_display_name):
         f"Listen here: {share_url}\n\n"
         f"This link expires automatically -- no account or app needed."
     )
+    img_html = (
+        f'<img src="{art_url}" alt="" style="width:100%; max-width:480px; '
+        f'border-radius:12px; margin-bottom:16px; display:block;">'
+        if art_url else ""
+    )
     html_body = f"""
     <div style="font-family: sans-serif; max-width: 480px;">
+      {img_html}
       <p>{display_name} shared <strong>{content_title}</strong> with you on MusicLounge.</p>
       <p><a href="{share_url}" style="display:inline-block; background:#FF9137; color:#29231F;
          padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold;">
