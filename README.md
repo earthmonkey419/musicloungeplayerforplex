@@ -14,6 +14,24 @@ It also includes two social listening modes, launched right from the player:
 - **Room Mode** — start a shared listening session; guests join by code and add to one shared queue, no accounts needed.
 - **Share Mode** — send a track, album, artist, or playlist as a private, time-limited link.
 
+## Player vs. Jukebox
+
+MusicLounge Player and [MusicLounge Jukebox](https://musiclounge.vp-fun.com) are sibling
+apps under Verbena Projects. Both are free, self-hosted, and share Room Mode and Share
+Mode. Player is the full listening app — personal search, browse, playlists, and a
+persistent queue on top of that. Jukebox is the lite version, for when all you want is
+to start a room or send a link, with no personal library browsing.
+
+|                            | Player | Jukebox |
+| -------------------------- | :----: | :-----: |
+| Personal search & browse   |   ✓    |    —    |
+| Playlists (native + synced)|   ✓    |    —    |
+| Personal queue & transport |   ✓    |    —    |
+| Room Mode                  |   ✓    |    ✓    |
+| Share Mode                 |   ✓    |    ✓    |
+
+Showcase site: [musicloungeplayer.vp-fun.com](https://musicloungeplayer.vp-fun.com)
+
 ## Features
 
 - **Search** your whole library, with fast infinite-scroll results — a "top matches" row of album results appears above tracks when relevant
