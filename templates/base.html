@@ -42,7 +42,7 @@
   {% endif %}
 
   <div class="wrap{% if needs_audio_bar or player_family %} wrap-has-player-bar{% endif %}">
-    <div id="spa-content">
+    <div id="spa-content" data-player-family="{{ 'true' if player_family else 'false' }}">
       {% block content %}{% endblock %}
     </div>
     {% include "partials/_footer.html" %}

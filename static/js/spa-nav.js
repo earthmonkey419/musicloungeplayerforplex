@@ -88,6 +88,21 @@
       return;
     }
 
+    // Some pages render differently depending on server-side state --
+    // Room's dashboard is player_family (SPA-eligible) only when no
+    // room is active yet; the moment a room exists, it renders as a
+    // real, separate page instead (its own richer Now Playing UI,
+    // server-authoritative audio). #spa-content always exists either
+    // way, so that alone can't distinguish the two -- this data
+    // attribute is the explicit signal. Falling back to a real
+    // navigation here, rather than soft-swapping in a page that
+    // wasn't actually meant for this zone, matches the same safety
+    // principle as the redirected-to-login check above.
+    if (newContent.dataset.playerFamily !== "true") {
+      window.location.href = url;
+      return;
+    }
+
     if (typeof window.__spaTeardown === "function") {
       try { window.__spaTeardown(); } catch (e) { console.error("SPA teardown error:", e); }
       window.__spaTeardown = null;

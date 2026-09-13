@@ -240,7 +240,21 @@ def dashboard():
         qr_data_uri=qr_data_uri,
         join_url=join_url,
         needs_audio_bar=bool(room),
-        hide_bar_ui=True,
+        hide_bar_ui=bool(room),
+        # player_family (and so the SPA persistent-playback zone) only
+        # when no room is active yet -- the "no room running" state is
+        # just a plain "Start a Room" form with no room-specific JS at
+        # all, so it's safe to fold into the same zone Player/Browse/
+        # Playlists already share, letting Player's own audio keep
+        # playing while someone's just looking at this page rather
+        # than committing to hosting. The moment a room actually
+        # exists, this drops back to today's separate, full-page
+        # behavior (server-authoritative audio, its own richer Now
+        # Playing UI) -- no attempt to keep Player's audio going once
+        # someone has actually committed to a room; see spa-nav.js's
+        # data-player-family check, which falls back to a real
+        # navigation exactly at this boundary.
+        player_family=(room is None),
     )
 
 def _send_tracks_to_room(tracks, room_name_if_new):
