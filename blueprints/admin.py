@@ -31,6 +31,15 @@ def login():
     if request.method == "POST":
         if db.verify_admin_password(request.form.get("password", "")):
             session["is_admin"] = True
+            # Opt-in only -- unchecked, this stays a browser-session
+            # cookie (today's unchanged behavior: closing the browser
+            # logs you out). Checked, it persists up to
+            # PERMANENT_SESSION_LIFETIME (see app.py) even after the
+            # browser closes -- a real, understood tradeoff (a lost or
+            # stolen device stays logged in for that whole window) the
+            # admin is choosing themselves, not something forced on by
+            # default.
+            session.permanent = bool(request.form.get("remember"))
             return redirect(url_for("player.index"))
         return render_template("admin_login.html", error="Wrong password.")
     return render_template("admin_login.html")

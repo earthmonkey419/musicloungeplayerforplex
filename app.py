@@ -25,7 +25,7 @@ each other at runtime.
 """
 from flask import Flask, request
 from werkzeug.middleware.proxy_fix import ProxyFix
-from datetime import datetime
+from datetime import datetime, timedelta
 import config
 
 
@@ -33,6 +33,13 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = config.SECRET_KEY
     app.config["SESSION_COOKIE_SECURE"] = config.COOKIE_SECURE
+    # Bounds "Stay logged in" (see admin.login()) -- only sessions
+    # explicitly marked session.permanent = True use this lifetime at
+    # all; a normal login without the checkbox stays a browser-session
+    # cookie as before (gone when the browser closes), unaffected by
+    # this setting. 30 days, not indefinite, so a lost/stolen device
+    # eventually times out on its own even if nobody notices.
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
