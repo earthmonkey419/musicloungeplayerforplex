@@ -305,7 +305,7 @@ def _send_tracks_to_room(tracks, room_name_if_new):
     if was_empty_before:
         nxt = db.pop_next(room["session_id"])
         if nxt:
-            db.set_now_playing(room["session_id"], db.queue_row_to_track(nxt))
+            db.set_now_playing(room["session_id"], db.queue_row_to_track(nxt), start_playing=False)
     return room
 
 

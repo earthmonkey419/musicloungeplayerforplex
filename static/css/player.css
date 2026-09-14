@@ -242,6 +242,7 @@
 
 .pl-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--pl-space-sm); }
 .pl-section-header-tight { margin-bottom: var(--pl-space-xs); }
+.pl-header-actions { display: flex; align-items: center; gap: var(--pl-space-md); }
 .pl-link-btn {
   background: none;
   border: none;

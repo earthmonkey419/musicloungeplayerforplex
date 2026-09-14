@@ -49,8 +49,19 @@
   <div id="results-albums-section" hidden>
     <div class="pl-section-header" style="margin-top:0;">
       <h3 style="margin:0; font-size:16px;">Albums</h3>
+      <div class="pl-header-actions">
+        <button id="albums-play-all-btn" class="pl-link-btn">▶ Play All Albums</button>
+        <button id="albums-add-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
+      </div>
     </div>
     <div id="results-albums-grid" class="browse-grid" style="margin-bottom: var(--pl-space-md);"></div>
+  </div>
+  <div id="results-tracks-header" class="pl-section-header" style="margin-top:0;" hidden>
+    <h3 style="margin:0; font-size:16px;">Tracks</h3>
+    <div class="pl-header-actions">
+      <button id="play-all-btn" class="pl-link-btn">▶ Play All</button>
+      <button id="add-all-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
+    </div>
   </div>
   <div id="results-scroll" class="pl-results-scroll">
     <ul id="results-list" class="track-list"></ul>
@@ -148,6 +159,67 @@ const resultsSection = document.getElementById("results-section");
 const defaultView = document.getElementById("default-view");
 const resultsScroll = document.getElementById("results-scroll");
 const resultsList = document.getElementById("results-list");
+const playAllBtn = document.getElementById("play-all-btn");
+playAllBtn.addEventListener("click", () => {
+  MLPlayer.playQueue(allLoadedTracks, 0);
+});
+
+// Shared by "Play All Albums" and albums "Add to Playlist" -- resolves
+// every matched album's tracks in parallel (the content-tracks resolver
+// has no batch mode) and concatenates in the order albums appeared in
+// the results, not resolution-completion order.
+async function resolveAllAlbumTracks() {
+  const results = await Promise.all(
+    allLoadedAlbums.map(a =>
+      fetch(`/api/player/content-tracks?type=album&ref=${encodeURIComponent(a.rating_key)}`)
+        .then(r => r.json())
+        .catch(() => ({ tracks: [] }))
+    )
+  );
+  const combined = results.flatMap(r => r.tracks || []);
+  if (combined.length === 0) {
+    alert("Couldn't load any tracks from these albums.");
+  }
+  return combined;
+}
+
+const albumsPlayAllBtn = document.getElementById("albums-play-all-btn");
+albumsPlayAllBtn.addEventListener("click", async () => {
+  if (!allLoadedAlbums.length) return;
+  albumsPlayAllBtn.disabled = true;
+  albumsPlayAllBtn.textContent = "Loading…";
+  try {
+    const combined = await resolveAllAlbumTracks();
+    if (combined.length === 0) return;
+    MLPlayer.playQueue(combined, 0);
+  } finally {
+    albumsPlayAllBtn.disabled = false;
+    albumsPlayAllBtn.textContent = "▶ Play All Albums";
+  }
+});
+
+const albumsAddPlaylistBtn = document.getElementById("albums-add-playlist-btn");
+albumsAddPlaylistBtn.addEventListener("click", async () => {
+  if (!allLoadedAlbums.length) return;
+  albumsAddPlaylistBtn.disabled = true;
+  albumsAddPlaylistBtn.textContent = "Loading…";
+  try {
+    const combined = await resolveAllAlbumTracks();
+    if (combined.length === 0) return;
+    openAddToPlaylistBulk(combined, `${allLoadedAlbums.length} matched album${allLoadedAlbums.length === 1 ? "" : "s"}`);
+  } finally {
+    albumsAddPlaylistBtn.disabled = false;
+    albumsAddPlaylistBtn.textContent = "➕ Add to Playlist";
+  }
+});
+
+const addAllPlaylistBtn = document.getElementById("add-all-playlist-btn");
+addAllPlaylistBtn.addEventListener("click", () => {
+  if (!allLoadedTracks.length) return;
+  openAddToPlaylistBulk(allLoadedTracks, `${allLoadedTracks.length} track result${allLoadedTracks.length === 1 ? "" : "s"}`);
+});
+
+const resultsTracksHeader = document.getElementById("results-tracks-header");
 const backToTopBtn = document.getElementById("back-to-top-btn");
 
 const atpModal = document.getElementById("add-to-playlist-modal");
@@ -155,6 +227,7 @@ const atpTrackLabel = document.getElementById("atp-track-label");
 const atpPlaylistList = document.getElementById("atp-playlist-list");
 const atpNewName = document.getElementById("atp-new-name");
 let atpCurrentTrack = null;
+let atpCurrentTracks = null;
 
 // --- Infinite-scroll search/mood results ---------------------------------
 // Ported from RiderMusic's proven pattern (ridermusic_guest.py): the
@@ -182,6 +255,7 @@ let searchRequestId = 0;
 let allLoadedTracks = [];  // cumulative across pages, so Play/next-prev
                            // work across everything loaded so far, not
                            // just the most recent page
+let allLoadedAlbums = []; // current album-results tiles, for "Play All Albums"
 
 function trackRow(t, indexInAllLoaded) {
   const li = document.createElement("li");
@@ -198,7 +272,7 @@ function trackRow(t, indexInAllLoaded) {
     <button class="room-share-trigger" title="Room or Share">⋯</button>
   `;
   li.querySelector(".track-play").addEventListener("click", () => {
-    MLPlayer.playQueue(allLoadedTracks, indexInAllLoaded);
+    MLPlayer.playTrack(t);
   });
   li.querySelector(".track-enqueue").addEventListener("click", () => MLPlayer.enqueue(t));
   li.querySelector(".track-add").addEventListener("click", () => openAddToPlaylist(t));
@@ -224,6 +298,7 @@ function albumResultTile(a) {
 function renderAlbumResults(albums) {
   const section = document.getElementById("results-albums-section");
   const grid = document.getElementById("results-albums-grid");
+  allLoadedAlbums = albums || [];
   if (!albums || albums.length === 0) {
     section.hidden = true;
     grid.innerHTML = "";
@@ -241,12 +316,14 @@ function appendResultsPage(tracks, isFirstPage) {
   }
   if (isFirstPage && tracks.length === 0) {
     resultsList.innerHTML = '<li class="empty">No matches found.</li>';
+    resultsTracksHeader.hidden = true;
     return;
   }
   tracks.forEach(t => {
     allLoadedTracks.push(t);
     resultsList.appendChild(trackRow(t, allLoadedTracks.length - 1));
   });
+  resultsTracksHeader.hidden = allLoadedTracks.length === 0;
 }
 
 function showLoadingMore() {
@@ -397,6 +474,7 @@ backToTopBtn.addEventListener("click", () => {
 
 function openAddToPlaylist(track) {
   atpCurrentTrack = track;
+  atpCurrentTracks = null;
   atpTrackLabel.textContent = `"${track.title}" — ${track.artist}`;
   atpNewName.value = "";
   renderPlaylistPickerList();
@@ -404,9 +482,19 @@ function openAddToPlaylist(track) {
 }
 window.openAddToPlaylist = openAddToPlaylist;
 
+function openAddToPlaylistBulk(tracks, label) {
+  atpCurrentTrack = null;
+  atpCurrentTracks = tracks;
+  atpTrackLabel.textContent = `${tracks.length} track${tracks.length === 1 ? "" : "s"}${label ? " — " + label : ""}`;
+  atpNewName.value = "";
+  renderPlaylistPickerList();
+  atpModal.hidden = false;
+}
+
 function closeAddToPlaylist() {
   atpModal.hidden = true;
   atpCurrentTrack = null;
+  atpCurrentTracks = null;
 }
 
 function renderPlaylistPickerList() {
@@ -420,13 +508,32 @@ function renderPlaylistPickerList() {
     const btn = document.createElement("button");
     btn.className = "pl-modal-playlist-btn";
     btn.textContent = p.name;
-    btn.addEventListener("click", () => addTrackToPlaylist(p.id, p.name));
+    btn.addEventListener("click", () => addToPlaylist(p.id, p.name));
     li.appendChild(btn);
     atpPlaylistList.appendChild(li);
   });
 }
 
-function addTrackToPlaylist(playlistId, playlistName) {
+function addToPlaylist(playlistId, playlistName) {
+  if (atpCurrentTracks) {
+    fetch(`/playlists/api/${playlistId}/add-tracks`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ tracks: atpCurrentTracks.map(t => ({
+        rating_key: t.rating_key, title: t.title, artist: t.artist, duration_sec: t.duration_sec || 0,
+      })) }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          closeAddToPlaylist();
+        } else {
+          alert(data.error || "Couldn't add those tracks.");
+        }
+      })
+      .catch(() => alert("Something went wrong adding those tracks."));
+    return;
+  }
   fetch(`/playlists/api/${playlistId}/add-track`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -458,7 +565,7 @@ document.getElementById("atp-new-btn").addEventListener("click", () => {
     .then(data => {
       if (!data.ok) { alert(data.error || "Couldn't create playlist."); return; }
       nativePlaylists.push({id: data.playlist_id, name: name, source: "native"});
-      addTrackToPlaylist(data.playlist_id, name);
+      addToPlaylist(data.playlist_id, name);
     });
 });
 

@@ -24,6 +24,7 @@
     <div id="browse-grid" class="browse-grid"></div>
   </div>
   <div id="az-quickbar" class="az-quickbar" hidden></div>
+  <button id="browse-play-all-btn" class="pl-link-btn" hidden>▶ Play All</button>
   <button id="browse-back-to-top" class="pl-back-to-top" hidden title="Back to top">↑ Top</button>
 </div>
 
@@ -76,6 +77,10 @@ let allLoadedTracks = []; // only populated/used when currentType === "tracks"
 
 const scrollEl = document.getElementById("browse-scroll");
 const gridEl = document.getElementById("browse-grid");
+const playAllBtn = document.getElementById("browse-play-all-btn");
+playAllBtn.addEventListener("click", () => {
+  MLPlayer.playQueue(allLoadedTracks, 0);
+});
 const backToTopBtn = document.getElementById("browse-back-to-top");
 const sortSelect = document.getElementById("sort-select");
 const typeButtons = document.querySelectorAll(".browse-type-btn");
@@ -153,7 +158,7 @@ function trackRow(t, indexInAllLoaded) {
     <button class="room-share-trigger" title="Room or Share">⋯</button>
   `;
   li.querySelector(".track-play").addEventListener("click", () => {
-    MLPlayer.playQueue(allLoadedTracks, indexInAllLoaded);
+    MLPlayer.playTrack(t);
   });
   li.querySelector(".track-enqueue").addEventListener("click", () => MLPlayer.enqueue(t));
   li.querySelector(".track-add").addEventListener("click", () => openAddToPlaylist(t));
@@ -238,6 +243,10 @@ const quickbarEl = document.getElementById("az-quickbar");
 
 function updateQuickbarVisibility() {
   quickbarEl.hidden = currentSort !== "title";
+}
+
+function updatePlayAllVisibility() {
+  playAllBtn.hidden = currentType !== "tracks";
 }
 
 async function jumpToLetter(letter) {
@@ -329,6 +338,7 @@ typeButtons.forEach(btn => {
     setActiveTypeButton();
     updateUrl();
     updateQuickbarVisibility();
+    updatePlayAllVisibility();
     resetAndLoad();
   });
 });
@@ -337,6 +347,7 @@ sortSelect.addEventListener("change", () => {
   currentSort = sortSelect.value;
   updateUrl();
   updateQuickbarVisibility();
+  updatePlayAllVisibility();
   resetAndLoad();
 });
 
@@ -350,6 +361,7 @@ setActiveTypeButton();
 gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
 updateUrl();
 updateQuickbarVisibility();
+updatePlayAllVisibility();
 loadPage();
 
 // SPA-nav teardown -- disconnects the IntersectionObserver before

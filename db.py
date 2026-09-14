@@ -123,18 +123,27 @@ def bump_device_count(session_id):
     conn.close()
 
 
-def set_now_playing(session_id, track):
+def set_now_playing(session_id, track, start_playing=True):
     """`track` must be the plex_client._track_to_dict() shape: keys
     rating_key/title/artist/duration_sec. If you have a room_queue row
     instead (different column names -- track_ref, not rating_key), pass
-    it through queue_row_to_track() first."""
+    it through queue_row_to_track() first.
+
+    `start_playing` controls whether this promotion also flips
+    is_playing to true. Defaults to True, matching skip's existing
+    behavior (skipping to the next track should keep audio going).
+    Pass start_playing=False when a track is being promoted to
+    now_playing with no explicit host play action behind it -- a
+    guest's first queue add, or Send to Room populating an empty
+    room -- so it doesn't silently start real audio unattended."""
     conn = get_db()
     conn.execute(
         """UPDATE room_sessions SET
            now_playing_ref = ?, now_playing_title = ?, now_playing_artist = ?,
-           now_playing_duration = ?, position_sec = 0, is_playing = 1
+           now_playing_duration = ?, position_sec = 0, is_playing = ?
            WHERE session_id = ?""",
-        (track["rating_key"], track["title"], track["artist"], track["duration_sec"], session_id),
+        (track["rating_key"], track["title"], track["artist"], track["duration_sec"],
+         1 if start_playing else 0, session_id),
     )
     conn.commit()
     conn.close()
@@ -513,6 +522,35 @@ def add_track_to_playlist(playlist_id, track):
            VALUES (?, ?, ?, ?, ?, ?)""",
         (playlist_id, max_pos + 1, track["rating_key"], track["title"], track["artist"], track["duration_sec"]),
     )
+    conn.execute("UPDATE playlists SET updated_at = ? WHERE id = ?", (_now(), playlist_id))
+    conn.commit()
+    conn.close()
+
+
+def add_tracks_to_playlist(playlist_id, tracks):
+    """Bulk-appends multiple tracks to a native playlist in one
+    connection -- powers 'add this whole album to a playlist' from the
+    shared Room/Share popover. Avoids looping add_track_to_playlist()
+    N times, which would mean N separate connections and N live Plex
+    lookups for one action. Computes the starting position once, then
+    inserts every track from there. Same defensive normalization
+    responsibility as _send_tracks_to_room(): callers may pass
+    DOM-sourced track dicts missing duration_sec, so default to 0
+    rather than raising a KeyError."""
+    conn = get_db()
+    max_pos = conn.execute(
+        "SELECT COALESCE(MAX(position), -1) as m FROM playlist_tracks WHERE playlist_id = ?",
+        (playlist_id,),
+    ).fetchone()["m"]
+    for i, t in enumerate(tracks):
+        conn.execute(
+            """INSERT INTO playlist_tracks
+               (playlist_id, position, track_ref, title, artist, duration_sec)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (playlist_id, max_pos + 1 + i, t.get("rating_key"),
+             t.get("title", "Unknown Title"), t.get("artist", "Unknown Artist"),
+             t.get("duration_sec") or 0),
+        )
     conn.execute("UPDATE playlists SET updated_at = ? WHERE id = ?", (_now(), playlist_id))
     conn.commit()
     conn.close()

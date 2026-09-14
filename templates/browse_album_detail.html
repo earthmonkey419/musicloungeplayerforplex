@@ -51,6 +51,7 @@
 <script>
 (function () {
 const nativePlaylists = {{ playlists_for_modal | tojson }};
+const ALBUM_TITLE = {{ album_title | tojson }};
 
 function currentTracks() {
   return Array.from(document.querySelectorAll("#track-list .track-row")).map(row => ({
@@ -91,11 +92,22 @@ document.querySelectorAll(".room-share-trigger:not(#album-room-share-trigger)").
 });
 
 // --- Add-to-playlist modal (same pattern as player.html) -----------------
+// Two modes now: single-track (existing per-row "+" button, and the
+// shared popover's own track-level "Add to Playlist") and bulk (this
+// page's album-level "Add to Playlist", added for "add this whole
+// album"). Single-track mode is UNCHANGED -- still hits /add-track,
+// which does a live Plex lookup for accurate duration_sec, even
+// though this page's currentTracks() only has rating_key/title/artist
+// from the DOM. Bulk mode hits the new /add-tracks endpoint instead,
+// same client-supplied-and-server-normalized approach
+// _send_tracks_to_room() already established, rather than looping the
+// single-track endpoint N times (N live Plex lookups for one action).
 const atpModal = document.getElementById("add-to-playlist-modal");
 const atpTrackLabel = document.getElementById("atp-track-label");
 const atpPlaylistList = document.getElementById("atp-playlist-list");
 const atpNewName = document.getElementById("atp-new-name");
 let atpCurrentTrack = null;
+let atpCurrentTracks = null;
 
 document.querySelectorAll(".track-add").forEach((btn, i) => {
   btn.addEventListener("click", () => openAddToPlaylist(currentTracks()[i]));
@@ -103,13 +115,25 @@ document.querySelectorAll(".track-add").forEach((btn, i) => {
 
 function openAddToPlaylist(track) {
   atpCurrentTrack = track;
+  atpCurrentTracks = null;
   atpTrackLabel.textContent = `"${track.title}" — ${track.artist}`;
   atpNewName.value = "";
   renderPlaylistPickerList();
   atpModal.hidden = false;
 }
 window.openAddToPlaylist = openAddToPlaylist;
-function closeAddToPlaylist() { atpModal.hidden = true; atpCurrentTrack = null; }
+
+function openAddToPlaylistBulk(tracks) {
+  atpCurrentTrack = null;
+  atpCurrentTracks = tracks;
+  atpTrackLabel.textContent = `${tracks.length} track${tracks.length === 1 ? "" : "s"} from "${ALBUM_TITLE}"`;
+  atpNewName.value = "";
+  renderPlaylistPickerList();
+  atpModal.hidden = false;
+}
+window.openAddToPlaylistBulk = openAddToPlaylistBulk;
+
+function closeAddToPlaylist() { atpModal.hidden = true; atpCurrentTrack = null; atpCurrentTracks = null; }
 
 function renderPlaylistPickerList() {
   atpPlaylistList.innerHTML = "";
@@ -122,13 +146,29 @@ function renderPlaylistPickerList() {
     const btn = document.createElement("button");
     btn.className = "pl-modal-playlist-btn";
     btn.textContent = p.name;
-    btn.addEventListener("click", () => addTrackToPlaylist(p.id, p.name));
+    btn.addEventListener("click", () => addToPlaylist(p.id, p.name));
     li.appendChild(btn);
     atpPlaylistList.appendChild(li);
   });
 }
 
-function addTrackToPlaylist(playlistId, playlistName) {
+function addToPlaylist(playlistId, playlistName) {
+  if (atpCurrentTracks) {
+    fetch(`/playlists/api/${playlistId}/add-tracks`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ tracks: atpCurrentTracks.map(t => ({
+        rating_key: t.rating_key, title: t.title, artist: t.artist, duration_sec: t.duration_sec || 0,
+      })) }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) closeAddToPlaylist();
+        else alert(data.error || "Couldn't add those tracks.");
+      })
+      .catch(() => alert("Something went wrong adding those tracks."));
+    return;
+  }
   fetch(`/playlists/api/${playlistId}/add-track`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -157,7 +197,7 @@ document.getElementById("atp-new-btn").addEventListener("click", () => {
     .then(data => {
       if (!data.ok) { alert(data.error || "Couldn't create playlist."); return; }
       nativePlaylists.push({id: data.playlist_id, name: name, source: "native"});
-      addTrackToPlaylist(data.playlist_id, name);
+      addToPlaylist(data.playlist_id, name);
     });
 });
 })();

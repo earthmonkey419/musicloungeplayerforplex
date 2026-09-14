@@ -183,7 +183,7 @@ def api_queue_add():
         if not room["now_playing_ref"]:
             nxt = db.pop_next(room_id)
             if nxt:
-                db.set_now_playing(room_id, db.queue_row_to_track(nxt))
+                db.set_now_playing(room_id, db.queue_row_to_track(nxt), start_playing=False)
 
         return jsonify({"ok": True})
 

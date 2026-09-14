@@ -170,6 +170,28 @@ def api_add_track(playlist_id):
     return jsonify({"ok": True})
 
 
+@bp.route("/api/<int:playlist_id>/add-tracks", methods=["POST"])
+@admin_required
+def api_add_tracks(playlist_id):
+    """Bulk variant of api_add_track() -- takes a list of client-supplied
+    track dicts (rating_key/title/artist, duration_sec optional) rather
+    than a single rating_key, and does no live Plex lookup per track.
+    Powers 'add whole album to playlist' from the shared popover."""
+    playlist = db.get_playlist(playlist_id)
+    if not playlist:
+        return jsonify({"error": "Playlist not found."}), 404
+    if playlist["source"] != "native":
+        return jsonify({"error": "Can't add tracks directly to a Plex-synced playlist."}), 400
+
+    body = request.get_json(silent=True) or {}
+    tracks = body.get("tracks")
+    if not isinstance(tracks, list) or not tracks:
+        return jsonify({"error": "No tracks provided."}), 400
+
+    db.add_tracks_to_playlist(playlist_id, tracks)
+    return jsonify({"ok": True, "added": len(tracks)})
+
+
 @bp.route("/api/<int:playlist_id>/remove-track", methods=["POST"])
 @admin_required
 def api_remove_track(playlist_id):

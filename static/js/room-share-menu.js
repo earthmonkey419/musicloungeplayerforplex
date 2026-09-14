@@ -39,9 +39,11 @@
     // define it at all (you can't add a track that's already in this
     // playlist to itself), so this option only appears where the
     // function actually exists rather than throwing when clicked.
-    const addPlaylistBtn = item.type === "track" && typeof window.openAddToPlaylist === "function"
-      ? '<button class="room-share-popover-item" data-action="addplaylist">➕ Add to Playlist</button>'
-      : "";
+    const addPlaylistBtn =
+      (item.type === "track" && typeof window.openAddToPlaylist === "function") ||
+      (item.type === "album" && typeof window.openAddToPlaylistBulk === "function")
+        ? '<button class="room-share-popover-item" data-action="addplaylist">➕ Add to Playlist</button>'
+        : "";
 
     const menu = document.createElement("div");
     menu.className = "room-share-popover";
@@ -83,6 +85,21 @@
     const addPlaylistTrigger = menu.querySelector('[data-action="addplaylist"]');
     if (addPlaylistTrigger) {
       addPlaylistTrigger.addEventListener("click", () => {
+        if (item.type === "album") {
+          showStatus("Loading tracks…");
+          fetch(`/api/player/content-tracks?type=album&ref=${item.ref}`)
+            .then(r => r.json())
+            .then(data => {
+              if (!data.tracks || data.tracks.length === 0) {
+                showStatus(data.error || "No tracks found.", true);
+                return;
+              }
+              closeMenu();
+              window.openAddToPlaylistBulk(data.tracks);
+            })
+            .catch(() => showStatus("Something went wrong.", true));
+          return;
+        }
         closeMenu();
         window.openAddToPlaylist({ rating_key: item.ref, title: item.title, artist: item.artist });
       });
