@@ -490,6 +490,7 @@ function openAddToPlaylistBulk(tracks, label) {
   renderPlaylistPickerList();
   atpModal.hidden = false;
 }
+window.openAddToPlaylistBulk = openAddToPlaylistBulk;
 
 function closeAddToPlaylist() {
   atpModal.hidden = true;

@@ -18,6 +18,7 @@
   const closeBtn = document.getElementById("queue-modal-close");
   const clearBtn = document.getElementById("queue-modal-clear");
   const sendToRoomBtn = document.getElementById("queue-send-to-room");
+  const addPlaylistBtn = document.getElementById("queue-add-playlist");
   if (!btn || !modal || typeof MLPlayer === "undefined") return;
 
   function renderQueueModal() {
@@ -83,6 +84,12 @@
 
   btn.addEventListener("click", () => {
     renderQueueModal();
+    // openAddToPlaylistBulk() is defined locally per-template (currently
+    // player.html and browse_album_detail.html only, same "not every
+    // page has this" situation room-share-menu.js's own Add to Playlist
+    // option already handles) -- only show this button where it exists,
+    // rather than showing it everywhere and failing silently on click.
+    if (addPlaylistBtn) addPlaylistBtn.hidden = typeof window.openAddToPlaylistBulk !== "function";
     modal.hidden = false;
   });
   closeBtn.addEventListener("click", () => { modal.hidden = true; });
@@ -120,6 +127,15 @@
           sendToRoomBtn.disabled = false;
           sendToRoomBtn.textContent = "📡 Room";
         });
+    });
+  }
+
+  if (addPlaylistBtn) {
+    addPlaylistBtn.addEventListener("click", () => {
+      const queue = MLPlayer.getQueue();
+      if (queue.length === 0 || typeof window.openAddToPlaylistBulk !== "function") return;
+      modal.hidden = true;
+      window.openAddToPlaylistBulk(queue, "the current queue");
     });
   }
 
