@@ -52,6 +52,7 @@
       <div class="pl-header-actions">
         <button id="albums-play-all-btn" class="pl-link-btn">▶ Play All Albums</button>
         <button id="albums-add-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
+        <button id="albums-start-room-btn" class="pl-link-btn">📡 Start a Room</button>
       </div>
     </div>
     <div id="results-albums-grid" class="browse-grid" style="margin-bottom: var(--pl-space-md);"></div>
@@ -61,6 +62,7 @@
     <div class="pl-header-actions">
       <button id="play-all-btn" class="pl-link-btn">▶ Play All</button>
       <button id="add-all-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
+      <button id="start-room-tracks-btn" class="pl-link-btn">📡 Start a Room</button>
     </div>
   </div>
   <div id="results-scroll" class="pl-results-scroll">
@@ -213,10 +215,55 @@ albumsAddPlaylistBtn.addEventListener("click", async () => {
   }
 });
 
+function sendResultsToRoom(tracks, roomName, btn, restoreLabel) {
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  fetch("/admin/room/send-results", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ tracks, room_name: roomName }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        window.location.href = data.redirect;
+      } else {
+        alert(data.error || "Couldn't start a room.");
+        btn.disabled = false;
+        btn.textContent = restoreLabel;
+      }
+    })
+    .catch(() => {
+      alert("Something went wrong starting a room.");
+      btn.disabled = false;
+      btn.textContent = restoreLabel;
+    });
+}
+
+const albumsStartRoomBtn = document.getElementById("albums-start-room-btn");
+albumsStartRoomBtn.addEventListener("click", async () => {
+  if (!allLoadedAlbums.length) return;
+  albumsStartRoomBtn.disabled = true;
+  albumsStartRoomBtn.textContent = "Loading…";
+  const combined = await resolveAllAlbumTracks();
+  if (combined.length === 0) {
+    albumsStartRoomBtn.disabled = false;
+    albumsStartRoomBtn.textContent = "📡 Start a Room";
+    return;
+  }
+  sendResultsToRoom(combined, "Matched albums", albumsStartRoomBtn, "📡 Start a Room");
+});
+
 const addAllPlaylistBtn = document.getElementById("add-all-playlist-btn");
 addAllPlaylistBtn.addEventListener("click", () => {
   if (!allLoadedTracks.length) return;
   openAddToPlaylistBulk(allLoadedTracks, `${allLoadedTracks.length} track result${allLoadedTracks.length === 1 ? "" : "s"}`);
+});
+
+const startRoomTracksBtn = document.getElementById("start-room-tracks-btn");
+startRoomTracksBtn.addEventListener("click", () => {
+  if (!allLoadedTracks.length) return;
+  sendResultsToRoom(allLoadedTracks, "Search results", startRoomTracksBtn, "📡 Start a Room");
 });
 
 const resultsTracksHeader = document.getElementById("results-tracks-header");

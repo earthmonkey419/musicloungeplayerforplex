@@ -338,21 +338,51 @@ def room_send_content():
     return jsonify({"ok": True, "redirect": url_for("admin.dashboard")})
 
 
+@bp.route("/room/send-results", methods=["POST"])
+@admin_required
+def room_send_results():
+    """Bulk "Start a Room" from a page of loaded search/browse results
+    (Player's search results, or a Play-All-Albums-style combined
+    list) -- a deliberate, admin-picked set the same way
+    send_content()'s single-item case is, NOT an unintentionally-
+    accumulated personal queue like send_queue() below. Uses
+    get_content_tracks()'s existing 100-track safety limit for
+    consistency rather than send_queue()'s 20-track cap. Sends tracks
+    directly to _send_tracks_to_room() without touching MLPlayer at
+    all, so the admin's own device does not start playing locally --
+    unlike the "Play All, then send that queue to a Room" workaround,
+    which does trigger local playback as a side effect of Play All
+    itself."""
+    body = request.get_json(silent=True) or {}
+    tracks = body.get("tracks", [])
+    if not tracks:
+        return jsonify({"error": "No tracks to send."}), 400
+    tracks = tracks[:100]
+    room_name = body.get("room_name") or tracks[0].get("title", "My Lounge")
+    _send_tracks_to_room(tracks, room_name)
+    return jsonify({"ok": True, "redirect": url_for("admin.dashboard")})
+
+
 @bp.route("/room/send-queue", methods=["POST"])
 @admin_required
 def room_send_queue():
     """Powers "Send Queue to Room" from the Queue popup. Tracks come
     directly from the client (MLPlayer.getQueue()) since a personal
     queue isn't a single Plex-addressable entity the server could
-    resolve on its own, unlike send-content above. Capped at 20 --
-    server-side, not just client-side -- per the original brainstorm:
-    a queue could have accumulated unintentionally large, unlike a
-    playlist/album the admin deliberately picked."""
+    resolve on its own, unlike send-content above. Capped at 40 --
+    server-side, not just client-side -- raised from the original 20
+    once bulk Add-to-Playlist (from search results, album detail, and
+    the Queue popup itself) made deliberately-built larger queues a
+    normal case, not just an edge case. Still capped, not uncapped
+    like send_results() below: an ordinary queue built up via one-at-
+    a-time Enqueue clicks over a long session can still accumulate
+    unintentionally, which send_results()'s explicitly-loaded-results
+    case can't."""
     body = request.get_json(silent=True) or {}
     tracks = body.get("tracks", [])
     if not tracks:
         return jsonify({"error": "Queue is empty."}), 400
-    tracks = tracks[:20]
+    tracks = tracks[:40]
     room_name = tracks[0].get("title", "My Lounge")
     _send_tracks_to_room(tracks, room_name)
     return jsonify({"ok": True, "redirect": url_for("admin.dashboard")})
