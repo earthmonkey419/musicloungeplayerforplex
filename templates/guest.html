@@ -10,7 +10,8 @@
 
 <div class="pl-card pl-card-surface">
   <div class="room-card-label">NOW PLAYING</div>
-  <div id="now-playing-block">
+  <div id="now-playing-block" style="display:flex; align-items:center; gap:12px;">
+    <img id="np-art" class="track-art" src="" alt="" style="display:none;" onerror="this.style.display='none'">
     <p id="np-line" style="margin:0;">Nothing yet — search or pick a mood below to get started.</p>
   </div>
 
@@ -37,33 +38,161 @@
     <button class="mood-pill" onclick="loadMood('rock')">Rock</button>
   </div>
 
+  <div class="pl-chip-row" style="margin-top:var(--pl-space-md);">
+    <span class="pl-chip-label">Tags</span>
+    <div class="tag-explore-wrap">
+      <input id="tag-input" type="text" list="tag-options" placeholder="Type a tag…" autocomplete="off">
+      <datalist id="tag-options"></datalist>
+    </div>
+    <button id="tag-explore-btn" class="pl-btn pl-btn-mint" onclick="runTagExplore()">Explore</button>
+  </div>
+
   <ul id="results" class="track-list" style="margin-top:var(--pl-space-md);"></ul>
+  <div id="results-sentinel" style="height:1px;"></div>
 </div>
 
 <script>
 let searchTimer = null;
+// Pagination state, shared by SEARCH and TAG browsing -- both are
+// paginated, offset/limit-based, same response shape. Mood stays its
+// own separate, unpaginated flat fetch (loadMood()/renderMoodResults()
+// below), deliberately untouched -- porting mood pagination too would
+// require guest-side mood pagination that doesn't exist yet, well
+// beyond "add tag search."
+const RESULTS_PAGE_SIZE = 20;
+let currentQueryType = null;   // 'search' or 'tag'
+let currentQueryValue = null;
+let currentShuffleSeed = null; // tag browsing only; reset on every
+                                // fresh Explore submission, threaded
+                                // through "load more" so pagination
+                                // stays correct despite the underlying
+                                // order being shuffled -- same pattern
+                                // Player's own tag/mood browsing uses.
+let resultsOffset = 0;
+let hasMoreResults = false;
+let isLoadingResults = false;
+let resultsObserver = null;
+
 function debouncedSearch() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(runSearch, 350);
 }
 
+function trackRowHtml(t) {
+  return `
+    <li class="track-row">
+      <img class="track-art" src="/art/${t.rating_key}" onerror="this.style.opacity=0">
+      <div class="track-meta">
+        <div class="track-title">${t.title}</div>
+        <div class="track-artist">${t.artist}</div>
+      </div>
+      <button class="pl-btn pl-btn-primary" style="padding:8px 14px; font-size:13px;" onclick="addToQueue('${t.rating_key}', this)">+ Add</button>
+    </li>`;
+}
+
 function runSearch() {
   const q = document.getElementById("search-input").value.trim();
-  if (!q) { document.getElementById("results").innerHTML = ""; return; }
-  fetch("/api/search?q=" + encodeURIComponent(q))
+  if (!q) {
+    currentQueryType = null;
+    hasMoreResults = false;
+    disconnectResultsObserver();
+    document.getElementById("results").innerHTML = "";
+    return;
+  }
+  currentQueryType = "search";
+  currentQueryValue = q;
+  loadResultsPage(true);
+}
+
+function runTagExplore() {
+  const tag = document.getElementById("tag-input").value.trim();
+  if (!tag) return;
+  currentQueryType = "tag";
+  currentQueryValue = tag;
+  loadResultsPage(true);
+}
+
+function loadResultsPage(isFirstPage) {
+  if (isLoadingResults || !currentQueryType) return;
+  isLoadingResults = true;
+  const type = currentQueryType;
+  const value = currentQueryValue;
+  if (isFirstPage) {
+    resultsOffset = 0;
+    currentShuffleSeed = null; // fresh browse -- always start a new shuffle
+  }
+  let url;
+  if (type === "search") {
+    url = `/api/search?q=${encodeURIComponent(value)}&offset=${resultsOffset}&limit=${RESULTS_PAGE_SIZE}`;
+  } else {
+    const params = new URLSearchParams({ name: value, offset: resultsOffset, limit: RESULTS_PAGE_SIZE });
+    if (currentShuffleSeed !== null) params.set("seed", currentShuffleSeed);
+    url = `/api/tag?${params.toString()}`;
+  }
+  fetch(url)
     .then(r => r.json())
-    .then(renderResults)
-    .catch(console.error);
+    .then(data => {
+      isLoadingResults = false;
+      if (type !== currentQueryType || value !== currentQueryValue) return; // a newer query started meanwhile
+      const el = document.getElementById("results");
+      if (data.error) {
+        el.innerHTML = `<li class="empty">${data.error}</li>`;
+        hasMoreResults = false;
+        disconnectResultsObserver();
+        return;
+      }
+      if (isFirstPage) el.innerHTML = "";
+      if (isFirstPage && data.results.length === 0) {
+        el.innerHTML = `<li class="empty">No matches. Try another search, tag, or mood.</li>`;
+        hasMoreResults = false;
+        disconnectResultsObserver();
+        return;
+      }
+      el.insertAdjacentHTML("beforeend", data.results.map(trackRowHtml).join(""));
+      hasMoreResults = !!data.has_more;
+      resultsOffset = typeof data.next_offset === "number" ? data.next_offset : resultsOffset + data.results.length;
+      if (type === "tag" && typeof data.seed === "number") currentShuffleSeed = data.seed;
+      ensureResultsObserver();
+    })
+    .catch(() => {
+      isLoadingResults = false;
+      document.getElementById("results").innerHTML = `<li class="empty">Couldn't reach the library right now — try again in a moment.</li>`;
+      hasMoreResults = false;
+      disconnectResultsObserver();
+    });
+}
+
+function ensureResultsObserver() {
+  if (!hasMoreResults) { disconnectResultsObserver(); return; }
+  if (resultsObserver) return;
+  const sentinel = document.getElementById("results-sentinel");
+  resultsObserver = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && hasMoreResults && !isLoadingResults && currentQueryType) {
+      loadResultsPage(false);
+    }
+  }, { rootMargin: "300px" });
+  resultsObserver.observe(sentinel);
+}
+
+function disconnectResultsObserver() {
+  if (resultsObserver) { resultsObserver.disconnect(); resultsObserver = null; }
 }
 
 function loadMood(mood) {
+  // Mood is unchanged/out of scope here -- still one flat, unpaginated
+  // fetch, separate from the search/tag pagination above. Reset that
+  // pagination state so a scroll-triggered page load left over from a
+  // previous search/tag browse can't fire after switching to a mood.
+  currentQueryType = null;
+  hasMoreResults = false;
+  disconnectResultsObserver();
   fetch("/api/mood/" + mood)
     .then(r => r.json())
-    .then(renderResults)
+    .then(renderMoodResults)
     .catch(console.error);
 }
 
-function renderResults(tracks) {
+function renderMoodResults(tracks) {
   const el = document.getElementById("results");
   if (tracks.error) {
     el.innerHTML = `<li class="empty">Couldn't reach the library right now — try again in a moment.</li>`;
@@ -73,16 +202,29 @@ function renderResults(tracks) {
     el.innerHTML = `<li class="empty">No matches. Try another search or mood.</li>`;
     return;
   }
-  el.innerHTML = tracks.map(t => `
-    <li class="track-row">
-      <img class="track-art" src="/art/${t.rating_key}" onerror="this.style.opacity=0">
-      <div class="track-meta">
-        <div class="track-title">${t.title}</div>
-        <div class="track-artist">${t.artist}</div>
-      </div>
-      <button class="pl-btn pl-btn-primary" style="padding:8px 14px; font-size:13px;" onclick="addToQueue('${t.rating_key}', this)">+ Add</button>
-    </li>`).join("");
+  el.innerHTML = tracks.map(trackRowHtml).join("");
 }
+
+// Tags predictive-typing field -- sourced from MusicMind's track_tags
+// table via /api/tags, same list Player's own Tags field uses.
+// Deliberately no client-side validation against the suggestion list
+// (unlike Player's tagLookup/invalid-shake behavior) -- the backend's
+// own response (a real error, or "No matches") already communicates
+// an unrecognized or MusicMind-unavailable tag correctly, same
+// treatment search already gets on this page. The datalist is purely
+// a typing aid, not a gate.
+const tagOptionsEl = document.getElementById("tag-options");
+
+fetch("/api/tags")
+  .then(r => r.json())
+  .then(data => {
+    (data.tags || []).forEach(t => {
+      const option = document.createElement("option");
+      option.value = t.tag;
+      tagOptionsEl.appendChild(option);
+    });
+  })
+  .catch(() => { /* Field just has no suggestions -- not worth an error state for this. */ });
 
 function addToQueue(ratingKey, btn) {
   btn.disabled = true;
@@ -118,10 +260,14 @@ function refreshQueue() {
     .then(state => {
       if (state.error) return;
       const npLine = document.getElementById("np-line");
+      const npArt = document.getElementById("np-art");
       if (state.now_playing) {
         npLine.innerHTML = `<strong>${state.now_playing.title}</strong> <span style="color:var(--pl-text-secondary);">— ${state.now_playing.artist}</span>`;
+        npArt.src = "/art/" + state.now_playing.ref;
+        npArt.style.display = "";
       } else {
         npLine.textContent = "Nothing yet — search or pick a mood below to get started.";
+        npArt.style.display = "none";
       }
       const list = document.getElementById("queue-list");
       if (state.queue.length === 0) {
