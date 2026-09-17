@@ -117,11 +117,10 @@
   border: 1px solid var(--pl-border);
   border-radius: var(--pl-radius-lg);
   text-align: center;
-  padding: var(--pl-space-xl) var(--pl-space-lg);
+  padding: var(--pl-space-md) var(--pl-space-lg);
   margin: var(--pl-space-lg) 0;
 }
-.pl-hero-logo { display: block; width: 100%; max-width: 700px; margin: 0 auto var(--pl-space-md); border-radius: var(--pl-radius-md); }
-.pl-hero-tagline { color: var(--pl-text-secondary); font-size: 16px; margin: 0; }
+.pl-hero-logo { display: block; width: 100%; max-width: 300px; margin: 0 auto; border-radius: var(--pl-radius-md); }
 
 .pl-search-band { margin-bottom: var(--pl-space-lg); }
 .pl-search-row { display: flex; gap: var(--pl-space-xs); margin-bottom: var(--pl-space-sm); }
@@ -208,13 +207,13 @@
 
 .pl-card {
   border-radius: var(--pl-radius-md);
-  padding: var(--pl-space-md);
+  padding: var(--pl-space-sm);
   border: 1px solid var(--pl-border);
   display: flex;
   flex-direction: column;
   gap: var(--pl-space-xs);
 }
-.pl-card-icon { font-size: 28px; }
+.pl-card-icon { font-size: 20px; }
 .pl-card h3 { margin-bottom: 2px; }
 .pl-card p { color: var(--pl-text-secondary); font-size: 14px; line-height: 20px; flex: 1; margin: 0; }
 .pl-card-gold { background: var(--pl-gold); }
@@ -226,14 +225,33 @@
 
 .pl-action-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr;
-  gap: var(--pl-space-md);
-  margin-bottom: var(--pl-space-lg);
-  align-items: stretch;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--pl-space-sm);
+  margin-bottom: var(--pl-space-md);
+  align-items: start;
 }
 @media (max-width: 900px) {
   .pl-action-row { grid-template-columns: 1fr; }
 }
+.pl-action-stack { display: flex; flex-direction: column; gap: var(--pl-space-sm); }
+.pl-mini-action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--pl-radius-md);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  color: rgba(23,59,58,0.9);
+}
+.pl-mini-action:hover { filter: brightness(0.96); }
+.pl-mini-action-icon { font-size: 18px; }
+.pl-mini-action-label { flex: 1; }
+.pl-mini-action-arrow { font-size: 14px; }
+.pl-mini-action-gold { background: var(--pl-gold); }
+.pl-mini-action-mint { background: var(--pl-mint); }
+.pl-mini-action-neutral { background: #fff; border: 1px solid var(--pl-border); }
 
 .pl-card-playlists { padding: var(--pl-space-md); }
 .pl-playlist-mini-list { list-style: none; margin: 0 0 var(--pl-space-xs); padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -624,10 +642,48 @@
 .site-footer { text-align: center; margin-top: 48px; padding: 20px 0; font-size: 13px; color: var(--ink-soft); }
 .ml-player-theme .site-footer { color: var(--pl-text-secondary); }
 
+.pl-scroll-row {
+  display: flex;
+  gap: var(--pl-space-sm);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--pl-space-xs);
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.pl-scroll-row .browse-tile { flex: 0 0 130px; width: 130px; min-width: 0; scroll-snap-align: start; }
+.pl-scroll-wrap { position: relative; }
+.pl-scroll-row { scrollbar-width: none; -ms-overflow-style: none; }
+.pl-scroll-row::-webkit-scrollbar { display: none; }
+.pl-scroll-arrow {
+  position: absolute;
+  top: 65px;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--pl-border);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  z-index: 2;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--pl-text);
+}
+.pl-scroll-arrow:hover { background: var(--pl-surface); }
+.pl-scroll-arrow[hidden] { display: none; }
+.pl-scroll-arrow-left { left: -12px; }
+.pl-scroll-arrow-right { right: -12px; }
+
 /* --- Library browsing: Artists/Albums grid --- */
 .browse-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: var(--pl-space-md);
   padding-bottom: var(--pl-space-md);
 }

@@ -6,7 +6,6 @@
 
 <section class="pl-hero">
   <img src="{{ url_for('static', filename='hero-logo.jpg') }}" alt="MusicLounge Player" class="pl-hero-logo">
-  <p class="pl-hero-tagline">The full listening lounge — search, browse, and build playlists, just for you.</p>
 </section>
 
 <section class="pl-search-band">
@@ -73,18 +72,22 @@
 
 <section id="default-view">
   <div class="pl-action-row">
-    <div class="pl-card pl-card-gold">
-      <div class="pl-card-icon">👥</div>
-      <h3>Start a Room</h3>
-      <p>Bring others in — shared queue, one now-playing, everyone joins by code.</p>
-      <a href="{{ url_for('admin.dashboard') }}" class="pl-btn pl-btn-dark">Start a Room →</a>
-    </div>
-
-    <div class="pl-card pl-card-mint">
-      <div class="pl-card-icon">🎁</div>
-      <h3>Share Some Music</h3>
-      <p>Send an album, artist, or playlist as a private link.</p>
-      <a href="{{ url_for('share.new_share') }}" class="pl-btn pl-btn-dark">Create a Link →</a>
+    <div class="pl-action-stack">
+      <a href="{{ url_for('admin.dashboard') }}" class="pl-mini-action pl-mini-action-gold">
+        <span class="pl-mini-action-icon">👥</span>
+        <span class="pl-mini-action-label">Start a Room</span>
+        <span class="pl-mini-action-arrow">→</span>
+      </a>
+      <a href="{{ url_for('share.new_share') }}" class="pl-mini-action pl-mini-action-mint">
+        <span class="pl-mini-action-icon">🎁</span>
+        <span class="pl-mini-action-label">Share Some Music</span>
+        <span class="pl-mini-action-arrow">→</span>
+      </a>
+      <a href="{{ url_for('browse.artists') }}" class="pl-mini-action pl-mini-action-neutral">
+        <span class="pl-mini-action-icon">🎧</span>
+        <span class="pl-mini-action-label">Browse Library</span>
+        <span class="pl-mini-action-arrow">→</span>
+      </a>
     </div>
 
     <div class="pl-card pl-card-neutral pl-card-playlists">
@@ -106,6 +109,29 @@
       <button id="new-playlist-btn" class="pl-btn pl-btn-mint pl-btn-block">+ New Playlist</button>
     </div>
   </div>
+
+  <section class="pl-recently-added">
+    <div class="pl-section-header">
+      <h2>Recently Added</h2>
+    </div>
+    {% if recent_albums %}
+    <div class="pl-scroll-wrap">
+      <button class="pl-scroll-arrow pl-scroll-arrow-left" type="button" aria-label="Scroll left" hidden>&#8249;</button>
+      <div class="pl-scroll-row">
+        {% for a in recent_albums %}
+        <a class="browse-tile" href="/browse/album/{{ a['rating_key'] }}">
+          <img class="browse-tile-art" src="/art/{{ a['rating_key'] }}" alt="" onerror="this.style.visibility='hidden'">
+          <div class="browse-tile-title">{{ a['title'] }}</div>
+          <div class="browse-tile-subtitle">{{ [a['artist'], a['year']] | select | join(' · ') }}</div>
+        </a>
+        {% endfor %}
+      </div>
+      <button class="pl-scroll-arrow pl-scroll-arrow-right" type="button" aria-label="Scroll right">&#8250;</button>
+    </div>
+    {% else %}
+    <p class="pl-empty-note">Nothing added recently.</p>
+    {% endif %}
+  </section>
 
   <section class="pl-recently-played">
     <div class="pl-section-header">
@@ -744,6 +770,29 @@ document.querySelectorAll("#default-view .pl-recently-played .track-row").forEac
   row.querySelector(".track-enqueue").addEventListener("click", () => {
     MLPlayer.enqueue(tracks[i]);
   });
+});
+
+// Horizontal scroll-row arrow controls -- generic: wires every
+// .pl-scroll-wrap on the page (Recently Added now, reusable for
+// mood pills or any future row) rather than hardcoding one instance.
+document.querySelectorAll(".pl-scroll-wrap").forEach(wrap => {
+  const row = wrap.querySelector(".pl-scroll-row");
+  const leftBtn = wrap.querySelector(".pl-scroll-arrow-left");
+  const rightBtn = wrap.querySelector(".pl-scroll-arrow-right");
+
+  function updateArrows() {
+    leftBtn.hidden = row.scrollLeft <= 0;
+    rightBtn.hidden = row.scrollLeft + row.clientWidth >= row.scrollWidth - 1;
+  }
+  leftBtn.addEventListener("click", () => {
+    row.scrollBy({ left: -row.clientWidth * 0.8, behavior: "smooth" });
+  });
+  rightBtn.addEventListener("click", () => {
+    row.scrollBy({ left: row.clientWidth * 0.8, behavior: "smooth" });
+  });
+  row.addEventListener("scroll", updateArrows);
+  window.addEventListener("resize", updateArrows);
+  updateArrows();
 });
 
 // SPA-nav teardown -- disconnects the results IntersectionObserver

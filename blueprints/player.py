@@ -4,6 +4,7 @@ import db
 import plex_client
 import musicmind_bridge
 import lastfm_client
+import library_browse
 from auth import admin_required
 
 bp = Blueprint("player", __name__)
@@ -14,10 +15,16 @@ bp = Blueprint("player", __name__)
 def index():
     playlists = [dict(p) for p in db.list_playlists()]
     recent_plays = [dict(p) for p in db.get_recent_plays(limit=10)]
+    try:
+        recent_albums = library_browse.browse_albums_page(offset=0, limit=50, sort="added")["results"]
+    except Exception:
+        current_app.logger.exception("Recently added albums failed")
+        recent_albums = []
     return render_template(
         "player.html",
         playlists=playlists,
         recent_plays=recent_plays,
+        recent_albums=recent_albums,
         musicmind_available=musicmind_bridge.is_available(),
         lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
         player_family=True,

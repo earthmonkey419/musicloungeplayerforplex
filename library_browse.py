@@ -25,7 +25,7 @@ def _sort_artists(pool, sort):
     return sorted(pool, key=lambda a: a["title"].lower())  # default: "title"
 
 
-def browse_artists_page(offset=0, limit=48, sort="title"):
+def browse_artists_page(offset=0, limit=48, sort="added"):
     cache_key = ("browse_artists",)
     pool = result_cache.cache_get(cache_key)
     if pool is None:
@@ -57,7 +57,7 @@ def _sort_albums(pool, sort):
     return sorted(pool, key=lambda a: a["title"].lower())  # default: "title"
 
 
-def browse_albums_page(offset=0, limit=48, sort="title"):
+def browse_albums_page(offset=0, limit=48, sort="added"):
     cache_key = ("browse_albums",)
     pool = result_cache.cache_get(cache_key)
     if pool is None:

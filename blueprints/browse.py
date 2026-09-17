@@ -37,7 +37,7 @@ def artists():
 def api_artists():
     offset = max(0, request.args.get("offset", 0, type=int) or 0)
     limit = min(96, max(1, request.args.get("limit", 48, type=int) or 48))
-    sort = request.args.get("sort", "title")
+    sort = request.args.get("sort", "added")
     try:
         return jsonify(library_browse.browse_artists_page(offset=offset, limit=limit, sort=sort))
     except Exception:
@@ -50,7 +50,7 @@ def api_artists():
 def api_albums():
     offset = max(0, request.args.get("offset", 0, type=int) or 0)
     limit = min(96, max(1, request.args.get("limit", 48, type=int) or 48))
-    sort = request.args.get("sort", "title")
+    sort = request.args.get("sort", "added")
     try:
         return jsonify(library_browse.browse_albums_page(offset=offset, limit=limit, sort=sort))
     except Exception:
