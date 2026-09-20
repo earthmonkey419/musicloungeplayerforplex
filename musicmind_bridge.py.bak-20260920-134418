@@ -10,7 +10,6 @@ a page is then sliced from this pool via result_cache.paged(), rather
 than each page triggering its own rebuild.
 """
 import os
-import bisect
 import sqlite3
 import random
 
@@ -52,13 +51,13 @@ def _musicmind_search(query, limit=POOL_SIZE):
         conn.row_factory = sqlite3.Row
         artist_rows = conn.execute(
             "SELECT rating_key, title, artist, album, duration_ms "
-            "FROM tracks WHERE LOWER(artist) LIKE ? LIMIT ?",
-            (q_like, limit),
+            "FROM tracks WHERE LOWER(artist) LIKE ?",
+            (q_like,),
         ).fetchall()
         title_rows = conn.execute(
             "SELECT rating_key, title, artist, album, duration_ms "
-            "FROM tracks WHERE LOWER(title) LIKE ? LIMIT ?",
-            (q_like, limit),
+            "FROM tracks WHERE LOWER(title) LIKE ?",
+            (q_like,),
         ).fetchall()
     finally:
         conn.close()
@@ -222,16 +221,15 @@ def tracks_by_tag_page(tag, offset=0, limit=20, shuffle_seed=None):
                 rows = conn.execute(
                     "SELECT t.rating_key, t.title, t.artist, t.album, t.duration_ms "
                     "FROM tracks t JOIN track_tags tt ON tt.rating_key = t.rating_key "
-                    "WHERE LOWER(tt.tag) = ?",
-                    (tag.lower(),),
+                    "WHERE tt.tag = ?",
+                    (tag,),
                 ).fetchall()
             finally:
                 conn.close()
         except Exception:
             return None
         pool = [t for t in (_row_to_track_dict(r) for r in rows) if t]
-        if pool:  # never cache an empty result -- it would stick for an hour
-            result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
+        result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
     return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed)
 
 
@@ -293,45 +291,6 @@ _TRACK_SORTS = {
 }
 
 
-_SORT_MEMO = {"pool": None, "sorted": {}, "letters": None}
-
-
-def _sorted_track_pool(pool, sort):
-    """Sorted view of the cached track pool, computed once per pool
-    per sort order instead of on every page/letter request. Tied to
-    the pool object's identity, so it resets automatically whenever
-    the underlying pool is rebuilt after its TTL."""
-    if _SORT_MEMO["pool"] is not pool:
-        _SORT_MEMO["pool"] = pool
-        _SORT_MEMO["sorted"] = {}
-        _SORT_MEMO["letters"] = None
-    key = sort if sort in _TRACK_SORTS else "title"
-    cached = _SORT_MEMO["sorted"].get(key)
-    if cached is None:
-        cached = sorted(pool, key=_TRACK_SORTS[key])
-        _SORT_MEMO["sorted"][key] = cached
-    return cached
-
-
-def _title_letter_offset(sorted_pool, letter):
-    """A-Z quickbar lookup against a title-sorted pool; the key list
-    is built once per sorted pool, then each tap is a binary search."""
-    idx = _SORT_MEMO["letters"]
-    if idx is None or idx[0] is not sorted_pool:
-        keys = [(t["title"] or "").lower() for t in sorted_pool]
-        first_non_alpha = next(
-            (i for i, k in enumerate(keys) if not k or not k[0].isalpha()),
-            len(keys),
-        )
-        idx = (sorted_pool, keys, first_non_alpha)
-        _SORT_MEMO["letters"] = idx
-    _, keys, first_non_alpha = idx
-    letter = letter.lower()
-    if letter == "#":
-        return first_non_alpha
-    return bisect.bisect_left(keys, letter)
-
-
 def browse_tracks_page(offset=0, limit=48, sort="title"):
     """Cached, paginated, sorted track browse. One cached pool serves
     every sort order (sorting an already-fetched in-memory list is
@@ -341,7 +300,8 @@ def browse_tracks_page(offset=0, limit=48, sort="title"):
     if pool is None:
         pool = _build_track_browse_pool()
         result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
-    sorted_pool = _sorted_track_pool(pool, sort)
+    sort_key = _TRACK_SORTS.get(sort, _TRACK_SORTS["title"])
+    sorted_pool = sorted(pool, key=sort_key)
     return result_cache.paged(sorted_pool, offset, limit)
 
 
@@ -354,24 +314,11 @@ def track_letter_offset(letter):
     if pool is None:
         pool = _build_track_browse_pool()
         result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
-    sorted_pool = _sorted_track_pool(pool, "title")
-    return _title_letter_offset(sorted_pool, letter)
+    sorted_pool = sorted(pool, key=_TRACK_SORTS["title"])
+    return result_cache.offset_for_letter(sorted_pool, lambda t: t["title"], letter)
 
 
 # --- Album search ------------------------------------------------------
-
-_PARENT_KEY_MEMO = {}
-
-
-def _album_key_for_track(plex, rating_key):
-    """A track's album key rarely changes, so remember it instead of
-    paying a Plex round trip every time the same album matches a
-    (prefix) search again."""
-    rk = int(rating_key)
-    if rk not in _PARENT_KEY_MEMO:
-        _PARENT_KEY_MEMO[rk] = plex.fetchItem(rk).parentRatingKey
-    return _PARENT_KEY_MEMO[rk]
-
 
 def search_albums(query, limit=8):
     """Fast album search: match against MusicMind's own track-level
@@ -411,9 +358,9 @@ def search_albums(query, limit=8):
 
     for row in rows:
         try:
-            album_key = _album_key_for_track(plex, row["sample_rating_key"])
+            sample_track = plex.fetchItem(int(row["sample_rating_key"]))
             results.append({
-                "content_ref": album_key,
+                "content_ref": sample_track.parentRatingKey,
                 "title": row["album"],
                 "subtitle": row["artist"],
             })
@@ -503,9 +450,9 @@ def search_albums_for_player(query, limit=5):
 
     for row in rows:
         try:
-            album_key = _album_key_for_track(plex, row["sample_rating_key"])
+            sample_track = plex.fetchItem(int(row["sample_rating_key"]))
             results.append({
-                "rating_key": album_key,
+                "rating_key": sample_track.parentRatingKey,
                 "title": row["album"],
                 "artist": row["artist"],
                 "year": row["year"],

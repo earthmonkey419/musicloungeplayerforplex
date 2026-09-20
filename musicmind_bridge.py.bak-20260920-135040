@@ -222,16 +222,15 @@ def tracks_by_tag_page(tag, offset=0, limit=20, shuffle_seed=None):
                 rows = conn.execute(
                     "SELECT t.rating_key, t.title, t.artist, t.album, t.duration_ms "
                     "FROM tracks t JOIN track_tags tt ON tt.rating_key = t.rating_key "
-                    "WHERE LOWER(tt.tag) = ?",
-                    (tag.lower(),),
+                    "WHERE tt.tag = ?",
+                    (tag,),
                 ).fetchall()
             finally:
                 conn.close()
         except Exception:
             return None
         pool = [t for t in (_row_to_track_dict(r) for r in rows) if t]
-        if pool:  # never cache an empty result -- it would stick for an hour
-            result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
+        result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
     return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed)
 
 

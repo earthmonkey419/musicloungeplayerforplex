@@ -251,15 +251,7 @@ def get_content_tracks(content_type, rating_key, limit=100):
     elif content_type == "playlist":
         title = item.title
         artist = None
-        # Ask Plex for only the first `limit` items. item.items() downloads
-        # the ENTIRE playlist (32K+ tracks for smart playlists like
-        # "All Music", ~85s) just to slice off 100.
-        tracks = item.fetchItems(
-            f"/playlists/{item.ratingKey}/items",
-            container_start=0,
-            container_size=limit,
-            maxresults=limit,
-        )
+        tracks = item.items()[:limit]
     elif content_type == "artist":
         title = item.title
         artist = item.title
@@ -310,7 +302,7 @@ def list_all_artists():
     title-filtered call. added_at included for the "Recently Added"
     sort option."""
     section = get_music_section()
-    artists = section.search(libtype="artist", container_size=1000)
+    artists = section.searchArtists()
     return sorted(
         [
             {
@@ -329,7 +321,7 @@ def list_all_albums():
     -- for the top-level Albums browse view. Sorting happens in
     library_browse.py; this is just the raw data fetch."""
     section = get_music_section()
-    albums = section.search(libtype="album", container_size=1000)
+    albums = section.albums()
     return [
         {
             "rating_key": a.ratingKey,

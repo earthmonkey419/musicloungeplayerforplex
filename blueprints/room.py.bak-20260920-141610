@@ -173,11 +173,7 @@ def api_mood(mood_key):
     if err:
         return err
     try:
-        # Cached pool + a fresh shuffle on every click (no seed), so
-        # repeat pill clicks surface different tracks. Plain list, same
-        # shape the guest page's loadMood() already expects.
-        page = musicmind_bridge.tracks_by_mood_page(mood_key, offset=0, limit=20)
-        return jsonify(page["results"])
+        return jsonify(plex_client.tracks_by_mood(mood_key))
     except Exception:
         current_app.logger.exception("Plex mood lookup failed for: %r", mood_key)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502

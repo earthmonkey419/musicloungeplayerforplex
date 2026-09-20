@@ -30,8 +30,9 @@
     const albumBtn = item.type === "track"
       ? '<button class="room-share-popover-item" data-action="album">💿 Go to Album</button>'
       : "";
-    const enqueueBtn =
-      '<button class="room-share-popover-item" data-action="enqueue">⏬ Add to Queue</button>';
+    const enqueueBtn = item.type === "track"
+      ? '<button class="room-share-popover-item" data-action="enqueue">⏬ Add to Queue</button>'
+      : "";
     // Defensive: openAddToPlaylist() is defined locally per-template
     // (Browse, Player, Album detail, Plex playlist detail) and
     // exposed on window by each -- native Playlist detail doesn't
@@ -75,25 +76,9 @@
     const enqueueTrigger = menu.querySelector('[data-action="enqueue"]');
     if (enqueueTrigger) {
       enqueueTrigger.addEventListener("click", () => {
-        if (item.type === "track") {
-          MLPlayer.enqueue({ rating_key: item.ref, title: item.title, artist: item.artist });
-          showStatus("Added to queue!");
-          setTimeout(closeMenu, 900);
-          return;
-        }
-        showStatus("Loading tracks…");
-        fetch(`/api/player/content-tracks?type=${item.type}&ref=${item.ref}`)
-          .then(r => r.json())
-          .then(data => {
-            if (!data.tracks || data.tracks.length === 0) {
-              showStatus(data.error || "No tracks found.", true);
-              return;
-            }
-            data.tracks.forEach(t => MLPlayer.enqueue(t));
-            showStatus("Added to queue!");
-            setTimeout(closeMenu, 900);
-          })
-          .catch(() => showStatus("Something went wrong.", true));
+        MLPlayer.enqueue({ rating_key: item.ref, title: item.title, artist: item.artist });
+        showStatus("Added to queue!");
+        setTimeout(closeMenu, 900);
       });
     }
 
