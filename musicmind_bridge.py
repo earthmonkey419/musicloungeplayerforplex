@@ -13,6 +13,7 @@ import os
 import bisect
 import sqlite3
 import random
+from collections import Counter
 
 import config
 import plex_client
@@ -512,4 +513,154 @@ def search_albums_for_player(query, limit=5):
             })
         except Exception:
             continue
+    return results
+
+
+# --- Radio -----------------------------------------------------------------
+# Scoring mirrors MusicMind's find_similar_by_track() in brain.py: 10 points
+# per shared tag, up to 5 for BPM closeness, 3 for a key+scale match. If those
+# weights change there, change them here too. Deliberate differences: no tempo
+# arc, the seed is never returned, an exclude list, and random jitter so
+# repeated refills from one seed don't return the same neighbours.
+
+def _track_dicts(keys):
+    """Player-shaped track dicts for the given rating keys, in the order given.
+    Keys MusicMind doesn't know are silently skipped."""
+    keys = [str(k) for k in keys]
+    if not keys:
+        return []
+    conn = _connect()
+    try:
+        conn.row_factory = sqlite3.Row
+        ph = ",".join("?" * len(keys))
+        rows = conn.execute(
+            "SELECT rating_key, title, artist, album, duration_ms "
+            f"FROM tracks WHERE rating_key IN ({ph})",
+            keys,
+        ).fetchall()
+    finally:
+        conn.close()
+    by_key = {str(r["rating_key"]): _row_to_track_dict(r) for r in rows}
+    return [by_key[k] for k in keys if by_key.get(k)]
+
+
+def random_tag_seeds(n=3, min_count=21):
+    """Pick a random reliable tag and n random tracks carrying it.
+    Returns (tag, [rating_keys]) or None if MusicMind isn't available."""
+    if not is_available():
+        return None
+    tags = available_tags(min_count=min_count)
+    if not tags:
+        return None
+    tag = random.choice(tags)["tag"]
+    try:
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                "SELECT rating_key FROM track_tags WHERE LOWER(tag) = ? "
+                "ORDER BY RANDOM() LIMIT ?",
+                (tag.lower(), n),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+    return tag, [r[0] for r in rows]
+
+
+def radio_next(seed_keys, exclude_keys=(), limit=10, max_per_artist=2, jitter=10.0):
+    """Next batch of radio tracks for one or more seed tracks.
+
+    Returns a list of Player track dicts (empty if the seeds have no tags or
+    the neighbourhood is exhausted), or None if MusicMind isn't available or
+    the query failed -- the caller then uses its non-MusicMind path.
+    """
+    if not is_available():
+        return None
+    seeds = [str(k) for k in seed_keys if k is not None]
+    if not seeds:
+        return []
+    exclude = {str(k) for k in exclude_keys} | set(seeds)
+
+    try:
+        conn = _connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            ph = ",".join("?" * len(seeds))
+
+            tag_rows = conn.execute(
+                f"SELECT tag, COUNT(*) AS n FROM track_tags "
+                f"WHERE rating_key IN ({ph}) GROUP BY tag ORDER BY n DESC LIMIT 40",
+                seeds,
+            ).fetchall()
+            if not tag_rows:
+                return []
+            tag_weight = {r["tag"]: r["n"] / len(seeds) for r in tag_rows}
+
+            # Synapse table / real_artist column are optional -- probe, don't assume.
+            has_feat = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='track_audio_features'"
+            ).fetchone() is not None
+            track_cols = {r[1] for r in conn.execute("PRAGMA table_info(tracks)")}
+            artist_expr = "COALESCE(t.real_artist, t.artist)" if "real_artist" in track_cols else "t.artist"
+
+            seed_bpm = seed_key = seed_scale = None
+            if has_feat:
+                feats = conn.execute(
+                    f"SELECT bpm, key, scale FROM track_audio_features WHERE rating_key IN ({ph})",
+                    seeds,
+                ).fetchall()
+                bpms = sorted(f["bpm"] for f in feats if f["bpm"] is not None)
+                if bpms:
+                    seed_bpm = bpms[len(bpms) // 2]
+                keys = Counter((f["key"], f["scale"]) for f in feats if f["key"] is not None)
+                if keys:
+                    (seed_key, seed_scale), _ = keys.most_common(1)[0]
+
+            tags = list(tag_weight)
+            tph = ",".join("?" * len(tags))
+            if has_feat:
+                feat_cols = ", taf.bpm AS bpm, taf.key AS fkey, taf.scale AS scale"
+                feat_join = "LEFT JOIN track_audio_features taf ON taf.rating_key = t.rating_key"
+            else:
+                feat_cols = ", NULL AS bpm, NULL AS fkey, NULL AS scale"
+                feat_join = ""
+            rows = conn.execute(f"""
+                SELECT t.rating_key, t.title, {artist_expr} AS artist, t.album,
+                       t.duration_ms, GROUP_CONCAT(tt.tag, char(31)) AS shared{feat_cols}
+                FROM tracks t
+                JOIN track_tags tt ON tt.rating_key = t.rating_key
+                {feat_join}
+                WHERE tt.tag IN ({tph})
+                GROUP BY t.rating_key
+            """, tags).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+    scored = []
+    for r in rows:
+        if str(r["rating_key"]) in exclude:
+            continue
+        score = 10 * sum(tag_weight.get(t, 0) for t in r["shared"].split(chr(31)))
+        if seed_bpm is not None and r["bpm"] is not None:
+            score += max(0, 5 - abs(seed_bpm - r["bpm"]) / 2)
+        if seed_key is not None and r["fkey"] == seed_key and r["scale"] == seed_scale:
+            score += 3
+        scored.append((score + random.uniform(0, jitter), r))
+    scored.sort(key=lambda x: -x[0])
+
+    results, per_artist = [], {}
+    for _, r in scored:
+        a = r["artist"]
+        if per_artist.get(a, 0) >= max_per_artist:
+            continue
+        d = _row_to_track_dict(r)
+        if not d:
+            continue
+        per_artist[a] = per_artist.get(a, 0) + 1
+        results.append(d)
+        if len(results) >= limit:
+            break
     return results

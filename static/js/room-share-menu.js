@@ -30,6 +30,9 @@
     const albumBtn = item.type === "track"
       ? '<button class="room-share-popover-item" data-action="album">💿 Go to Album</button>'
       : "";
+    const radioBtn = (item.type === "track" || item.type === "album") && window.MLRadio
+      ? '<button class="room-share-popover-item" data-action="radio" hidden>📻 Start Radio</button>'
+      : "";
     const enqueueBtn =
       '<button class="room-share-popover-item" data-action="enqueue">⏬ Add to Queue</button>';
     // Defensive: openAddToPlaylist() is defined locally per-template
@@ -53,6 +56,7 @@
       <button class="room-share-popover-item" data-action="room">📡 Start a Room</button>
       <button class="room-share-popover-item" data-action="share">🔗 Share a Link</button>
       ${albumBtn}
+      ${radioBtn}
       <div class="room-share-popover-status" hidden></div>
     `;
     document.body.appendChild(menu);
@@ -143,6 +147,19 @@
         })
         .catch(() => showStatus("Something went wrong.", true));
     });
+
+    const radioTrigger = menu.querySelector('[data-action="radio"]');
+    if (radioTrigger) {
+      window.MLRadio.capabilities().then(caps => {
+        if (caps.track_radio && openMenuEl === menu && statusEl.hidden) radioTrigger.hidden = false;
+      });
+      radioTrigger.addEventListener("click", async () => {
+        showStatus("Starting radio…");
+        const ok = await window.MLRadio.start({ type: item.type, ref: item.ref });
+        if (ok) { showStatus("Radio started!"); setTimeout(closeMenu, 900); }
+        else showStatus("Couldn't start radio.", true);
+      });
+    }
 
     const albumTrigger = menu.querySelector('[data-action="album"]');
     if (albumTrigger) {

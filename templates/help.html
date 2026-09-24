@@ -15,6 +15,7 @@
     <a href="#help-search" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Search</a>
     <a href="#help-browse" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Browse</a>
     <a href="#help-more-menu" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">The ⋯ Menu</a>
+    <a href="#help-radio" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Radio</a>
     <a href="#help-playlists" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Playlists</a>
     <a href="#help-queue" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Queue &amp; Now Playing</a>
     <a href="#help-room" style="color:var(--pl-teal); font-weight:600; text-decoration:none;">Room Mode</a>
@@ -40,8 +41,15 @@
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-more-menu">
   <div class="room-card-label">THE ⋯ MENU</div>
   <p>The ⋯ button appears on tracks, albums, and playlists throughout the app — search results, Browse, and playlist views — and opens the same set of options for that item.</p>
-  <p><strong>Play Next</strong> inserts the item immediately after the current track, ahead of the rest of the queue. <strong>Add to Queue</strong> appends it to the end of the queue. <strong>Add to Playlist</strong> opens the playlist picker. <strong>Start a Room</strong> and <strong>Share a Link</strong> open those flows pre-filled with the selected item — see <a href="#help-room">Room Mode</a> and <a href="#help-share">Share Mode</a>. For tracks, <strong>Go to Album</strong> navigates to the track's album page.</p>
+  <p><strong>Play Next</strong> inserts the item immediately after the current track, ahead of the rest of the queue. <strong>Add to Queue</strong> appends it to the end of the queue. <strong>Add to Playlist</strong> opens the playlist picker. <strong>Start a Room</strong> and <strong>Share a Link</strong> open those flows pre-filled with the selected item — see <a href="#help-room">Room Mode</a> and <a href="#help-share">Share Mode</a>. For tracks, <strong>Go to Album</strong> navigates to the track's album page. For tracks and albums, <strong>Start Radio</strong> starts a station based on that item — see <a href="#help-radio">Radio</a>.</p>
   <p>On narrow screens, Add to Queue and Add to Playlist are available only through this menu; Play and ⋯ remain visible as standalone buttons.</p>
+</div>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-radio">
+  <div class="room-card-label">RADIO</div>
+  <p>Radio plays a continuous station that doesn't run out. Choose <strong>Start Radio</strong> from the ⋯ menu on any track or album, or press <strong>Random Radio</strong> on the search page. A station begins with the track (or a track from the album) and continues with similar music; when only a few tracks remain in the queue, more are added automatically. A small badge shows the station name — press ✕ on it to stop.</p>
+  <p>A station ends when you start something else playing, such as pressing Play on an album. Add to Queue and Play Next work normally while a station is running. Shuffle is turned off when a station starts so new tracks stay in order.</p>
+  <p>With MusicMind connected, similarity comes from your library's tags plus measured tempo and key. Without it, radio uses Plex's sonic analysis if your server has it (Plex Pass required). If neither is available, Start Radio is hidden and only Random Radio is offered, drawing from a random mood.</p>
 </div>
 
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);" id="help-playlists">

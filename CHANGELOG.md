@@ -22,7 +22,9 @@ this project uses [Semantic Versioning](https://semver.org/).
 - A-Z quickbar on Artists, Albums, and Tracks browse pages
 - Go to Album from any track row
 - Album results in main Player search
-- Unified ⋯ menu: Start Room, Share Link, Go to Album, Play Next, Add to Playlist
+- Unified ⋯ menu: Start Room, Share Link, Go to Album, Play Next, Add to Playlist, Start Radio
+- Radio: continuous stations seeded from any track or album (⋯ menu → Start Radio); more tracks are added automatically as the queue runs low. Uses MusicMind's tag + Synapse similarity when available, falling back to Plex sonic analysis
+- Random Radio button on the Player search page (random tag-based station; random mood station without MusicMind)
 - Album art thumbnail in Share emails
 - Installable PWA (manifest, Apple meta tags, home-screen icon, standalone mode)
 - Docker / Portainer support (Dockerfile, docker-compose.yml, `.env.example`)

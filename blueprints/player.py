@@ -218,3 +218,206 @@ def api_tag():
     except Exception:
         current_app.logger.exception("Tag browse failed for: %r", tag)
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
+
+
+# --- Radio -----------------------------------------------------------------
+# Three engines, chosen once at /start and echoed back by the client as `ctx`:
+#   sim   -- MusicMind tag+Synapse similarity (musicmind_bridge.radio_next)
+#   sonic -- Plex's own sonicallySimilar() (Plex Pass + analyzed library)
+#   mood  -- random mood-bucket pool (Random Radio only; always available)
+# Errors are 422 + JSON, never 502 (Cloudflare replaces 502 bodies with HTML).
+
+import random as _radio_random
+import result_cache as _radio_cache
+
+RADIO_BATCH = 10
+RADIO_MAX_SEEDS = 40
+
+
+def _radio_error(message):
+    return jsonify({"error": message}), 422
+
+
+def _radio_plex_track_dict(t):
+    return {
+        "rating_key": int(t.ratingKey),
+        "title": t.title,
+        "artist": t.grandparentTitle or "",
+        "album": t.parentTitle or "",
+        "duration_sec": int((t.duration or 0) / 1000),
+    }
+
+
+def _radio_sonic_available():
+    """One cached probe per hour: does this Plex server actually return
+    sonically-similar tracks? (needs Plex Pass + sonic analysis)"""
+    cached = _radio_cache.cache_get(("radio_sonic_ok",))
+    if cached is not None:
+        return cached["ok"]
+    ok = False
+    try:
+        plex = plex_client.get_plex()
+        section = next(s for s in plex.library.sections() if s.type == "artist")
+        sample = section.searchTracks(limit=1)
+        if sample:
+            ok = bool(sample[0].sonicallySimilar(limit=1))
+    except Exception:
+        ok = False
+    _radio_cache.cache_set(("radio_sonic_ok",), {"ok": ok}, ttl=3600)
+    return ok
+
+
+def _radio_sonic_batch(seeds, exclude, limit):
+    plex = plex_client.get_plex()
+    seed = plex.fetchItem(int(_radio_random.choice(seeds)))
+    ex = {str(k) for k in exclude} | {str(s) for s in seeds}
+    found = seed.sonicallySimilar(limit=limit * 4)
+    _radio_random.shuffle(found)  # nearest-4x-limit pool, shuffled: close but not repetitive
+    out, per_artist = [], {}
+    for t in found:
+        if str(t.ratingKey) in ex:
+            continue
+        artist = t.grandparentTitle or ""
+        if per_artist.get(artist, 0) >= 2:
+            continue
+        per_artist[artist] = per_artist.get(artist, 0) + 1
+        out.append(_radio_plex_track_dict(t))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _radio_mood_batch(mood, exclude, limit):
+    key = ("radio_mood_pool", mood)
+    pool = _radio_cache.cache_get(key)
+    if pool is None:
+        pool = musicmind_bridge._build_mood_pool(mood, False)
+        if pool:  # never cache an empty result
+            _radio_cache.cache_set(key, pool, ttl=_radio_cache._MOOD_CACHE_TTL)
+    ex = {str(k) for k in exclude}
+    fresh = [t for t in (pool or []) if str(t["rating_key"]) not in ex]
+    _radio_random.shuffle(fresh)
+    return fresh[:limit]
+
+
+def _radio_batch(ctx, seeds, exclude, limit):
+    """Returns a list of track dicts (possibly empty), or None on engine failure."""
+    mode = (ctx or {}).get("mode")
+    if mode == "sim":
+        return musicmind_bridge.radio_next(seeds, exclude_keys=exclude, limit=limit)
+    if mode == "sonic":
+        return _radio_sonic_batch(seeds, exclude, limit)
+    if mode == "mood":
+        return _radio_mood_batch(ctx.get("mood") or "rock", exclude, limit)
+    return None
+
+
+@bp.route("/api/player/radio/capabilities")
+@admin_required
+def api_radio_capabilities():
+    mm = musicmind_bridge.is_available()
+    track = mm or _radio_sonic_available()
+    return jsonify({
+        "track_radio": bool(track),
+        "random_radio": True,  # mood-bucket fallback always exists
+        "engine": "musicmind" if mm else ("plex-sonic" if track else "mood"),
+    })
+
+
+def _radio_start_seeded(kind, ref):
+    mm = musicmind_bridge.is_available()
+    plex = plex_client.get_plex()
+    item = plex.fetchItem(int(ref))
+
+    if kind == "track":
+        seeds = [int(ref)]
+        first = musicmind_bridge._track_dicts(seeds) if mm else [_radio_plex_track_dict(item)]
+        label = item.title
+    else:
+        plex_tracks = item.tracks()
+        if not plex_tracks:
+            return _radio_error("That album has no tracks.")
+        all_keys = [int(t.ratingKey) for t in plex_tracks]
+        pick = _radio_random.choice(all_keys)
+        seeds = _radio_random.sample(all_keys, min(len(all_keys), RADIO_MAX_SEEDS))
+        first = (musicmind_bridge._track_dicts([pick]) if mm
+                 else [_radio_plex_track_dict(t) for t in plex_tracks if int(t.ratingKey) == pick])
+        label = item.title
+
+    if mm:
+        ctx = {"mode": "sim"}
+    elif _radio_sonic_available():
+        ctx = {"mode": "sonic"}
+    else:
+        return _radio_error("Radio needs MusicMind, or a Plex server with sonic analysis.")
+
+    exclude = [t["rating_key"] for t in first]
+    batch = _radio_batch(ctx, [str(s) for s in seeds], exclude, RADIO_BATCH)
+    if not batch:
+        return _radio_error("Couldn't find similar tracks for that one.")
+    return jsonify({
+        "tracks": first + batch,
+        "seeds": [str(s) for s in seeds],
+        "label": f"Radio: {label}",
+        "ctx": ctx,
+    })
+
+
+def _radio_start_random():
+    if musicmind_bridge.is_available():
+        picked = musicmind_bridge.random_tag_seeds(3)
+        if picked and picked[1]:
+            tag, keys = picked
+            first = musicmind_bridge._track_dicts(keys)
+            batch = musicmind_bridge.radio_next(keys, exclude_keys=keys, limit=RADIO_BATCH) or []
+            if first or batch:
+                return jsonify({
+                    "tracks": first + batch,
+                    "seeds": [str(k) for k in keys],
+                    "label": f"Random Radio: {tag}",
+                    "ctx": {"mode": "sim"},
+                })
+    mood = _radio_random.choice(list(plex_client.MOOD_BUCKETS.keys()))
+    tracks = _radio_mood_batch(mood, [], RADIO_BATCH * 2)
+    if not tracks:
+        return _radio_error("Couldn't build a random station right now.")
+    return jsonify({
+        "tracks": tracks,
+        "seeds": [],
+        "label": f"Random Radio: {mood}",
+        "ctx": {"mode": "mood", "mood": mood},
+    })
+
+
+@bp.route("/api/player/radio/start", methods=["POST"])
+@admin_required
+def api_radio_start():
+    data = request.get_json(silent=True) or {}
+    kind = data.get("type")
+    ref = data.get("ref")
+    try:
+        if kind == "random":
+            return _radio_start_random()
+        if kind in ("track", "album") and ref:
+            return _radio_start_seeded(kind, ref)
+        return _radio_error("Unknown radio request.")
+    except Exception:
+        current_app.logger.exception("Radio start failed: %r", data)
+        return _radio_error("Couldn't start radio. Try again in a moment.")
+
+
+@bp.route("/api/player/radio/next", methods=["POST"])
+@admin_required
+def api_radio_next():
+    data = request.get_json(silent=True) or {}
+    try:
+        seeds = [str(s) for s in (data.get("seeds") or [])][:RADIO_MAX_SEEDS]
+        exclude = [str(k) for k in (data.get("exclude") or [])][:600]
+        limit = min(20, max(1, int(data.get("limit") or RADIO_BATCH)))
+        tracks = _radio_batch(data.get("ctx") or {}, seeds, exclude, limit)
+    except Exception:
+        current_app.logger.exception("Radio refill failed")
+        return _radio_error("Radio refill failed.")
+    if tracks is None:
+        return _radio_error("Radio engine unavailable.")
+    return jsonify({"tracks": tracks})
