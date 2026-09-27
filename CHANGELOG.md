@@ -53,6 +53,10 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Track titles heavily truncated on mobile
 - Mobile hamburger menu, overflowing mobile controls, SPA script redeclaration, album/artist art mismatch, and Last.fm scrobbles lost across navigation
 - Compilation/VA album tracks showing "Various Artists" instead of the real per-track performer (track artist lookup preferred the album-level Plex tag over the track-level one)
+- Real artist resolution (`COALESCE(real_artist, artist)`) now applied to search, mood, and tag lookups too, not just album detail and Radio -- VA compilation tracks were still showing "Various Artists" in search results and pill browsing
+- Mood/tag pill results were fully random with no popularity bias -- added play_count-weighted shuffle so popular tracks surface more often without ever excluding anything
+- Artist search treated "Mary J Blige" and "Mary J. Blige" as different artists -- periods are now normalized before matching
+- Instrumental-only filter let borderline vocal tracks through -- now requires `vi_results.p_voice < 0.4`, not just the coarser `is_instrumental` flag
 
 ## [1.0.0]
 
