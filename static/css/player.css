@@ -652,12 +652,23 @@
   scrollbar-width: thin;
 }
 .pl-scroll-row .browse-tile { flex: 0 0 130px; width: 130px; min-width: 0; scroll-snap-align: start; }
+.pl-scroll-row .mood-pill,
+.pl-scroll-row .tag-pill { flex: 0 0 auto; scroll-snap-align: start; }
+.pl-mood-section { margin-bottom: var(--pl-space-sm); }
+.pl-chip-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--pl-space-xs);
+  margin-bottom: var(--pl-space-xs);
+}
 .pl-scroll-wrap { position: relative; }
 .pl-scroll-row { scrollbar-width: none; -ms-overflow-style: none; }
 .pl-scroll-row::-webkit-scrollbar { display: none; }
 .pl-scroll-arrow {
   position: absolute;
-  top: 65px;
+  top: 50%;
   transform: translateY(-50%);
   width: 32px;
   height: 32px;

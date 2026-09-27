@@ -198,6 +198,22 @@ def api_tags():
         return jsonify({"tags": []})
 
 
+@bp.route("/api/player/moods")
+@admin_required
+def api_moods():
+    """Lists the library's genuine mood/energy tags (see
+    musicmind_bridge.MOOD_TAG_WORDS) for the Moods pill row. Empty
+    list (not an error) when MusicMind isn't configured or none of
+    the curated words are present -- the frontend falls back to its
+    own small hardcoded genre-based set rather than showing nothing."""
+    try:
+        moods = musicmind_bridge.available_moods()
+        return jsonify({"moods": moods or []})
+    except Exception:
+        current_app.logger.exception("Mood list lookup failed")
+        return jsonify({"moods": []})
+
+
 @bp.route("/api/player/tag")
 @admin_required
 def api_tag():

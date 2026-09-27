@@ -16,19 +16,27 @@
     </div>
     <button id="search-btn" class="pl-btn pl-btn-primary">Search</button>
   </div>
-  <div id="mood-pills" class="pl-chip-row">
-    <span class="pl-chip-label">Moods</span>
-    <button class="mood-pill" data-mood="funk">Funk</button>
-    <button class="mood-pill" data-mood="soul">Soul</button>
-    <button class="mood-pill" data-mood="jazz">Jazz</button>
-    <button class="mood-pill" data-mood="dance">Dance</button>
-    <button class="mood-pill" data-mood="chill">Chill</button>
-    <button class="mood-pill" data-mood="rock">Rock</button>
-    {% if musicmind_available %}
-    <label class="mood-instrumental-toggle">
-      <input type="checkbox" id="instrumental-only"> Instrumental only
-    </label>
-    {% endif %}
+  <div class="pl-mood-section">
+    <div class="pl-chip-row-header">
+      <span class="pl-chip-label">Moods</span>
+      {% if musicmind_available %}
+      <label class="mood-instrumental-toggle">
+        <input type="checkbox" id="instrumental-only"> Instrumental only
+      </label>
+      {% endif %}
+    </div>
+    <div class="pl-scroll-wrap">
+      <button class="pl-scroll-arrow pl-scroll-arrow-left" type="button" aria-label="Scroll left" hidden>&#8249;</button>
+      <div id="mood-pills" class="pl-scroll-row">
+        <button class="mood-pill mood-pill-fallback" data-mood="funk">Funk</button>
+        <button class="mood-pill mood-pill-fallback" data-mood="soul">Soul</button>
+        <button class="mood-pill mood-pill-fallback" data-mood="jazz">Jazz</button>
+        <button class="mood-pill mood-pill-fallback" data-mood="dance">Dance</button>
+        <button class="mood-pill mood-pill-fallback" data-mood="chill">Chill</button>
+        <button class="mood-pill mood-pill-fallback" data-mood="rock">Rock</button>
+      </div>
+      <button class="pl-scroll-arrow pl-scroll-arrow-right" type="button" aria-label="Scroll right">&#8250;</button>
+    </div>
   </div>
   <div id="tag-explore-row" class="pl-chip-row">
     <span class="pl-chip-label">Tags</span>
@@ -668,7 +676,7 @@ document.getElementById("search-input").addEventListener("keydown", (e) => {
 
 
 
-document.querySelectorAll(".mood-pill").forEach(btn => {
+function bindMoodPill(btn) {
   btn.addEventListener("click", () => {
     const instrumentalOnlyEl = document.getElementById("instrumental-only");
     currentQueryType = "mood";
@@ -676,7 +684,45 @@ document.querySelectorAll(".mood-pill").forEach(btn => {
     currentMoodInstrumentalOnly = !!(instrumentalOnlyEl && instrumentalOnlyEl.checked);
     loadResultsPage(true);
   });
-});
+}
+document.querySelectorAll(".mood-pill").forEach(bindMoodPill);
+
+// --- Moods row: real mood/energy tags when available -------------------
+// The static buttons above (Funk, Soul, Jazz, Dance, Chill, Rock) are
+// genre names, not moods -- a leftover from before track_tags existed.
+// When MusicMind has genuine mood/energy tags (see
+// musicmind_bridge.MOOD_TAG_WORDS), replace them with the real thing;
+// otherwise leave the fallback buttons in place but relabel the row
+// honestly, since they're genres.
+fetch("/api/player/moods")
+  .then(r => r.json())
+  .then(data => {
+    const moods = data.moods || [];
+    const moodPillsEl = document.getElementById("mood-pills");
+    const labelEl = document.querySelector(".pl-chip-row-header .pl-chip-label");
+    if (moods.length > 0) {
+      document.querySelectorAll(".mood-pill-fallback").forEach(btn => btn.remove());
+      moods.forEach(m => {
+        const btn = document.createElement("button");
+        btn.className = "mood-pill";
+        btn.type = "button";
+        btn.dataset.mood = m.tag;
+        btn.textContent = m.tag.charAt(0).toUpperCase() + m.tag.slice(1);
+        bindMoodPill(btn);
+        moodPillsEl.appendChild(btn);
+      });
+    } else if (labelEl) {
+      labelEl.textContent = "Genres";
+    }
+    // The scroll-wrap arrow visibility (wired further below) is
+    // calculated once at page load, before this fetch resolves -- so
+    // it reflects the static fallback pills, not whatever ended up
+    // here. Firing a resize event re-runs that same existing
+    // recalculation (it's already listening for resize) now that the
+    // real content is in place, without duplicating that logic here.
+    window.dispatchEvent(new Event("resize"));
+  })
+  .catch(() => { /* Row just keeps its fallback buttons -- not worth an error state. */ });
 
 // --- Tag explore (predictive-typing field + button) ----------------------
 // Sourced from MusicMind's track_tags table when available -- far
