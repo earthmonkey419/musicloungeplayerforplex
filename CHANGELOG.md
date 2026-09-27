@@ -52,6 +52,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Expanded Now Playing controls cut off in landscape
 - Track titles heavily truncated on mobile
 - Mobile hamburger menu, overflowing mobile controls, SPA script redeclaration, album/artist art mismatch, and Last.fm scrobbles lost across navigation
+- Compilation/VA album tracks showing "Various Artists" instead of the real per-track performer (track artist lookup preferred the album-level Plex tag over the track-level one)
 
 ## [1.0.0]
 
