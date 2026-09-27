@@ -56,6 +56,7 @@ def _track_to_dict(track):
         "artist": track.originalTitle or track.grandparentTitle or "Unknown Artist",
         "album": track.parentTitle or "",
         "duration_sec": duration_sec,
+        "play_count": getattr(track, "viewCount", 0) or 0,
     }
 
 
@@ -78,7 +79,7 @@ def search_tracks(query, limit=20):
        phrase match) while "blind lemon jefferson" (matching a full
        track title) worked."""
     section = get_music_section()
-    q_lower = query.lower()
+    q_norm = query.lower().replace(".", "")
     results = []
     seen = set()
 
@@ -90,7 +91,7 @@ def search_tracks(query, limit=20):
 
     try:
         all_artists = section.searchArtists()
-        matching_artists = [a for a in all_artists if q_lower in a.title.lower()]
+        matching_artists = [a for a in all_artists if q_norm in a.title.lower().replace(".", "")]
         for artist in matching_artists[:8]:
             add(artist.tracks()[:20])
     except Exception:

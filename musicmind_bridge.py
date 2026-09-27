@@ -31,6 +31,19 @@ def _connect():
     return sqlite3.connect(f"file:{config.MUSICMIND_DB_PATH}?mode=ro", uri=True)
 
 
+def _artist_expr(conn, prefix=""):
+    """SQL fragment for the resolved artist name: COALESCE(real_artist,
+    artist) when the VA-resolution column exists (same guard the Radio
+    similarity code already uses at line ~607), else the plain artist
+    column. Probed per-connection rather than assumed, since real_artist
+    was ALTERed into some MusicMind databases and not others. `prefix`
+    lets callers pass "t." for aliased queries."""
+    track_cols = {r[1] for r in conn.execute("PRAGMA table_info(tracks)")}
+    if "real_artist" in track_cols:
+        return f"COALESCE({prefix}real_artist, {prefix}artist)"
+    return f"{prefix}artist"
+
+
 def _row_to_track_dict(row):
     try:
         rating_key = int(row["rating_key"])
@@ -43,21 +56,24 @@ def _row_to_track_dict(row):
         "artist": row["artist"],
         "album": row["album"],
         "duration_sec": int(duration_ms / 1000),
+        "play_count": row["play_count"] or 0,
     }
 
 
 def _musicmind_search(query, limit=POOL_SIZE):
     q_like = f"%{query.lower()}%"
+    q_artist_like = f"%{query.lower().replace('.', '')}%"
     conn = _connect()
     try:
         conn.row_factory = sqlite3.Row
+        artist_expr = _artist_expr(conn)
         artist_rows = conn.execute(
-            "SELECT rating_key, title, artist, album, duration_ms "
-            "FROM tracks WHERE LOWER(artist) LIKE ? LIMIT ?",
-            (q_like, limit),
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms "
+            f"FROM tracks WHERE REPLACE(LOWER({artist_expr}), '.', '') LIKE ? LIMIT ?",
+            (q_artist_like, limit),
         ).fetchall()
         title_rows = conn.execute(
-            "SELECT rating_key, title, artist, album, duration_ms "
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms "
             "FROM tracks WHERE LOWER(title) LIKE ? LIMIT ?",
             (q_like, limit),
         ).fetchall()
@@ -112,8 +128,9 @@ def _mood_pool_from_musicmind(mood_key, pool_size=POOL_SIZE):
             return []
 
         placeholders = ",".join("?" * len(matched_keys))
+        artist_expr = _artist_expr(conn)
         track_rows = conn.execute(
-            "SELECT rating_key, title, artist, album, duration_ms "
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
             f"FROM tracks WHERE rating_key IN ({placeholders})",
             matched_keys,
         ).fetchall()
@@ -153,7 +170,7 @@ def tracks_by_mood_page(mood_key, offset=0, limit=20, instrumental_only=False, s
     if pool is None:
         pool = _build_mood_pool(mood_key, instrumental_only)
         result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
-    return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed)
+    return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed, weight_key="play_count")
 
 
 def available_tags(min_count=21):
@@ -220,8 +237,9 @@ def tracks_by_tag_page(tag, offset=0, limit=20, shuffle_seed=None):
             conn = _connect()
             try:
                 conn.row_factory = sqlite3.Row
+                artist_expr = _artist_expr(conn, prefix="t.")
                 rows = conn.execute(
-                    "SELECT t.rating_key, t.title, t.artist, t.album, t.duration_ms "
+                    f"SELECT t.rating_key, t.title, {artist_expr} AS artist, t.album, t.duration_ms, t.play_count "
                     "FROM tracks t JOIN track_tags tt ON tt.rating_key = t.rating_key "
                     "WHERE LOWER(tt.tag) = ?",
                     (tag.lower(),),
@@ -233,20 +251,43 @@ def tracks_by_tag_page(tag, offset=0, limit=20, shuffle_seed=None):
         pool = [t for t in (_row_to_track_dict(r) for r in rows) if t]
         if pool:  # never cache an empty result -- it would stick for an hour
             result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
-    return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed)
+    return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed, weight_key="play_count")
 
 
 def _filter_instrumental(tracks):
+    """Keeps only tracks confidently instrumental. is_instrumental=1
+    alone isn't strict enough -- the original VI classification pass
+    used a lenient cutoff (confirmed directly: some is_instrumental=1
+    tracks have vi_results.p_voice as high as 0.515, right at the
+    model's own decision boundary, not a bug -- a deliberate tradeoff
+    in that pass favoring recovering true instrumentals over
+    precision). Requiring p_voice < 0.4 from the same vi_results audit
+    table trims those borderline misses. Falls back to the plain
+    is_instrumental flag if vi_results doesn't exist (older DB, VI
+    pass never run) -- probed per-call, same guard style as the Radio
+    similarity code's optional-table checks."""
     rating_keys = [str(t["rating_key"]) for t in tracks]
     try:
         conn = _connect()
         conn.row_factory = sqlite3.Row
         placeholders = ",".join("?" for _ in rating_keys)
-        rows = conn.execute(
-            f"SELECT rating_key FROM tracks "
-            f"WHERE rating_key IN ({placeholders}) AND is_instrumental = 1",
-            rating_keys,
-        ).fetchall()
+        has_vi = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='vi_results'"
+        ).fetchone() is not None
+        if has_vi:
+            rows = conn.execute(
+                f"SELECT t.rating_key FROM tracks t "
+                f"JOIN vi_results v ON v.rating_key = t.rating_key "
+                f"WHERE t.rating_key IN ({placeholders}) "
+                f"AND t.is_instrumental = 1 AND v.p_voice < 0.4",
+                rating_keys,
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                f"SELECT rating_key FROM tracks "
+                f"WHERE rating_key IN ({placeholders}) AND is_instrumental = 1",
+                rating_keys,
+            ).fetchall()
         conn.close()
         instrumental_keys = {str(row["rating_key"]) for row in rows}
     except Exception:

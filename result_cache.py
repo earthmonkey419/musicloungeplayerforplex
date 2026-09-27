@@ -11,6 +11,7 @@ again.
 NOTE: this is a plain in-process dict, assumes a single gunicorn
 worker (mlplayer's ecosystem.config.cjs runs it that way).
 """
+import math
 import random
 import time
 
@@ -53,7 +54,7 @@ def paged(all_results, offset, limit):
     }
 
 
-def paged_shuffled(all_results, offset, limit, seed=None):
+def paged_shuffled(all_results, offset, limit, seed=None, weight_key=None):
     """Same as paged(), but pages through a shuffled copy of the pool
     instead of its natural order -- powers mood/genre browsing
     returning different tracks on repeat clicks, without the
@@ -67,11 +68,28 @@ def paged_shuffled(all_results, offset, limit, seed=None):
     time -- pagination stays correct (no duplicate or skipped tracks
     as the user scrolls) even though the order itself is random.
     A fresh pill click / new Explore submission omits the seed again,
-    getting a genuinely new shuffle."""
+    getting a genuinely new shuffle.
+
+    weight_key, if given, names a numeric field present on each item
+    (e.g. "play_count") to bias the shuffle toward popular items
+    without ever excluding anything -- standard weighted sampling
+    without replacement: each item gets a random key of
+    rng.random() ** (1 / (log1p(weight) + 1)), sorted descending.
+    log1p compresses outsized play counts so one heavily-played track
+    can't dominate every page; +1 keeps zero-play tracks in the mix
+    instead of dividing by zero. Omit weight_key for a flat shuffle."""
     if seed is None:
         seed = random.randint(0, 2**31 - 1)
-    shuffled = list(all_results)
-    random.Random(seed).shuffle(shuffled)
+    rng = random.Random(seed)
+    if weight_key:
+        shuffled = sorted(
+            all_results,
+            key=lambda item: rng.random() ** (1 / (math.log1p(item.get(weight_key) or 0) + 1)),
+            reverse=True,
+        )
+    else:
+        shuffled = list(all_results)
+        rng.shuffle(shuffled)
     page = shuffled[offset:offset + limit]
     has_more = (offset + limit) < len(shuffled)
     return {
