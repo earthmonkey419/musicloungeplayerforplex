@@ -30,6 +30,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Docker / Portainer support (Dockerfile, docker-compose.yml, `.env.example`)
 - README with Docker and manual setup, plus in-app Help page (`/help`)
 - MIT license
+- Curated Moods pill row backed by real MusicMind mood/energy tags (replacing genre-mislabeled buttons like Funk/Soul/Jazz), with an honest "Genres" fallback label when MusicMind isn't available
+- Horizontal-scroll layout for pill rows on narrow screens, matching Recently Added's existing scroll-arrow pattern
 
 ### Changed
 - Room Mode now requires an explicit play to start instead of auto-playing on promotion
@@ -53,6 +55,10 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Track titles heavily truncated on mobile
 - Mobile hamburger menu, overflowing mobile controls, SPA script redeclaration, album/artist art mismatch, and Last.fm scrobbles lost across navigation
 - Compilation/VA album tracks showing "Various Artists" instead of the real per-track performer (track artist lookup preferred the album-level Plex tag over the track-level one)
+- Real artist resolution (`COALESCE(real_artist, artist)`) now applied to search, mood, and tag lookups too, not just album detail and Radio -- VA compilation tracks were still showing "Various Artists" in search results and pill browsing
+- Mood/tag pill results were fully random with no popularity bias -- added play_count-weighted shuffle so popular tracks surface more often without ever excluding anything
+- Artist search treated "Mary J Blige" and "Mary J. Blige" as different artists -- periods are now normalized before matching
+- Instrumental-only filter let borderline vocal tracks through -- now requires `vi_results.p_voice < 0.4`, not just the coarser `is_instrumental` flag
 
 ## [1.0.0]
 
