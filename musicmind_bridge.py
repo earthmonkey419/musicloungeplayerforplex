@@ -68,12 +68,12 @@ def _musicmind_search(query, limit=POOL_SIZE):
         conn.row_factory = sqlite3.Row
         artist_expr = _artist_expr(conn)
         artist_rows = conn.execute(
-            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms "
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
             f"FROM tracks WHERE REPLACE(LOWER({artist_expr}), '.', '') LIKE ? LIMIT ?",
             (q_artist_like, limit),
         ).fetchall()
         title_rows = conn.execute(
-            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms "
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
             "FROM tracks WHERE LOWER(title) LIKE ? LIMIT ?",
             (q_like, limit),
         ).fetchall()
@@ -306,8 +306,9 @@ def _all_tracks_from_musicmind():
     conn = _connect()
     try:
         conn.row_factory = sqlite3.Row
+        artist_expr = _artist_expr(conn)
         rows = conn.execute(
-            "SELECT rating_key, title, artist, album, duration_ms FROM tracks"
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count FROM tracks"
         ).fetchall()
     finally:
         conn.close()
@@ -574,8 +575,9 @@ def _track_dicts(keys):
     try:
         conn.row_factory = sqlite3.Row
         ph = ",".join("?" * len(keys))
+        artist_expr = _artist_expr(conn)
         rows = conn.execute(
-            "SELECT rating_key, title, artist, album, duration_ms "
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
             f"FROM tracks WHERE rating_key IN ({ph})",
             keys,
         ).fetchall()
@@ -668,7 +670,8 @@ def radio_next(seed_keys, exclude_keys=(), limit=10, max_per_artist=2, jitter=10
                 feat_join = ""
             rows = conn.execute(f"""
                 SELECT t.rating_key, t.title, {artist_expr} AS artist, t.album,
-                       t.duration_ms, GROUP_CONCAT(tt.tag, char(31)) AS shared{feat_cols}
+                       t.duration_ms, t.play_count,
+                       GROUP_CONCAT(tt.tag, char(31)) AS shared{feat_cols}
                 FROM tracks t
                 JOIN track_tags tt ON tt.rating_key = t.rating_key
                 {feat_join}
