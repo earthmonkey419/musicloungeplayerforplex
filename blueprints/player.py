@@ -16,7 +16,7 @@ def index():
     playlists = [dict(p) for p in db.list_playlists()]
     recent_plays = [dict(p) for p in db.get_recent_plays(limit=10)]
     try:
-        recent_albums = library_browse.browse_albums_page(offset=0, limit=50, sort="added")["results"]
+        recent_albums = library_browse.browse_albums_page(offset=0, limit=30, sort="added")["results"]
     except Exception:
         current_app.logger.exception("Recently added albums failed")
         recent_albums = []

@@ -1,7 +1,5 @@
 /* MusicLounge Player -- design system per redesign brief (Sept 2026). */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 .ml-player-theme {
   --pl-bg: #FFF8E9;
   --pl-surface: #F4FCE8;

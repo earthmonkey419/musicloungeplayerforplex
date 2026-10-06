@@ -39,7 +39,7 @@
       li.dataset.index = i;
       li.innerHTML = `
         <span class="track-drag-handle" title="Drag to reorder">⋮⋮</span>
-        <img class="track-art" src="/art/${t.rating_key}" alt="">
+        <img class="track-art" src="/art/${t.rating_key}?w=128" alt="" loading="lazy" decoding="async">
         <div class="track-meta">
           <div class="track-title">${i === currentIndex ? "▶ " : ""}${t.title}</div>
           <div class="track-artist">${t.artist}</div>

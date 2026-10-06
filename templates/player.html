@@ -5,7 +5,7 @@
 {% block content %}
 
 <section class="pl-hero">
-  <img src="{{ url_for('static', filename='hero-logo.jpg') }}" alt="MusicLounge Player" class="pl-hero-logo">
+  <img src="{{ url_for('static', filename='hero-logo-600.jpg') }}" alt="MusicLounge Player" class="pl-hero-logo">
 </section>
 
 <section class="pl-search-band">
@@ -129,7 +129,7 @@
       <div class="pl-scroll-row">
         {% for a in recent_albums %}
         <a class="browse-tile" href="/browse/album/{{ a['rating_key'] }}">
-          <img class="browse-tile-art" src="/art/{{ a['rating_key'] }}" alt="" onerror="this.style.visibility='hidden'">
+          <img class="browse-tile-art" src="/art/{{ a['rating_key'] }}?w=300" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">
           <div class="browse-tile-title">{{ a['title'] }}</div>
           <div class="browse-tile-subtitle">{{ [a['artist'], a['year']] | select | join(' · ') }}</div>
         </a>
@@ -150,7 +150,7 @@
     <ul class="track-list">
       {% for t in recent_plays %}
       <li class="track-row" data-ref="{{ t['track_ref'] }}" data-title="{{ t['title'] }}" data-artist="{{ t['artist'] }}">
-        <img class="track-art" src="/art/{{ t['track_ref'] }}" alt="">
+        <img class="track-art" src="/art/{{ t['track_ref'] }}?w=128" alt="" loading="lazy" decoding="async">
         <div class="track-meta">
           <div class="track-title">{{ t['title'] }}</div>
           <div class="track-artist">{{ t['artist'] }}</div>
@@ -343,7 +343,7 @@ function trackRow(t, indexInAllLoaded) {
   const li = document.createElement("li");
   li.className = "track-row";
   li.innerHTML = `
-    <img class="track-art" src="/art/${t.rating_key}" alt="">
+    <img class="track-art" src="/art/${t.rating_key}?w=128" alt="" loading="lazy" decoding="async">
     <div class="track-meta">
       <div class="track-title">${t.title}</div>
       <div class="track-artist">${t.artist}</div>
@@ -370,7 +370,7 @@ function albumResultTile(a) {
   el.href = `/browse/album/${a.rating_key}`;
   const subtitle = [a.artist, a.year].filter(Boolean).join(" · ");
   el.innerHTML = `
-    <img class="browse-tile-art" src="/art/${a.rating_key}" alt="" onerror="this.style.visibility='hidden'">
+    <img class="browse-tile-art" src="/art/${a.rating_key}?w=300" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">
     <div class="browse-tile-title">${a.title}</div>
     <div class="browse-tile-subtitle">${subtitle}</div>
   `;

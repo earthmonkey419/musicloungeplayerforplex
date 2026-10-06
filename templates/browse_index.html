@@ -124,7 +124,7 @@ function artistTile(a) {
   el.className = "browse-tile";
   el.href = `/browse/artist/${a.rating_key}`;
   el.innerHTML = `
-    <img class="browse-tile-art browse-tile-art-round" src="/art/${a.rating_key}" alt="" onerror="this.style.visibility='hidden'">
+    <img class="browse-tile-art browse-tile-art-round" src="/art/${a.rating_key}?w=300" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">
     <div class="browse-tile-title">${a.title}</div>
   `;
   return el;
@@ -136,7 +136,7 @@ function albumTile(a) {
   el.href = `/browse/album/${a.rating_key}`;
   const subtitle = [a.artist, a.year].filter(Boolean).join(" · ");
   el.innerHTML = `
-    <img class="browse-tile-art" src="/art/${a.rating_key}" alt="" onerror="this.style.visibility='hidden'">
+    <img class="browse-tile-art" src="/art/${a.rating_key}?w=300" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">
     <div class="browse-tile-title">${a.title}</div>
     <div class="browse-tile-subtitle">${subtitle}</div>
   `;
@@ -147,7 +147,7 @@ function trackRow(t, indexInAllLoaded) {
   const li = document.createElement("li");
   li.className = "track-row";
   li.innerHTML = `
-    <img class="track-art" src="/art/${t.rating_key}" alt="">
+    <img class="track-art" src="/art/${t.rating_key}?w=128" alt="" loading="lazy" decoding="async">
     <div class="track-meta">
       <div class="track-title">${t.title}</div>
       <div class="track-artist">${t.artist}</div>

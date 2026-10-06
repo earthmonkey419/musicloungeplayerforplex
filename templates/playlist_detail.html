@@ -18,7 +18,7 @@
     {% if playlist['source'] == 'native' %}
     <span class="track-drag-handle" title="Drag to reorder">⋮⋮</span>
     {% endif %}
-    <img class="track-art" src="/art/{{ t['track_ref'] }}" alt="">
+    <img class="track-art" src="/art/{{ t['track_ref'] }}?w=128" alt="" loading="lazy" decoding="async">
     <div class="track-meta">
       <div class="track-title">{{ t['title'] }}</div>
       <div class="track-artist">{{ t['artist'] }}</div>

@@ -18,7 +18,7 @@
 <ul id="track-list" class="track-list">
   {% for t in tracks %}
   <li class="track-row" data-ref="{{ t['rating_key'] }}" data-title="{{ t['title'] }}" data-artist="{{ t['artist'] }}">
-    <img class="track-art" src="/art/{{ t['rating_key'] }}" alt="">
+    <img class="track-art" src="/art/{{ t['rating_key'] }}?w=128" alt="" loading="lazy" decoding="async">
     <div class="track-meta">
       <div class="track-title">{{ t['title'] }}</div>
       <div class="track-artist">{{ t['artist'] }}</div>

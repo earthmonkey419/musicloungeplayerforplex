@@ -40,7 +40,7 @@
  * on the page before this script runs.
  */
 window.MLPlayer = (function () {
-  const audioEl = document.getElementById("audio-el");
+  let audioEl = document.getElementById("audio-el"); // ACTIVE element; MLGapless swaps it on handoff
   const nowPlayingBar = document.getElementById("now-playing-bar");
   const npTitle = document.getElementById("np-title");
   const npArtist = document.getElementById("np-artist");
@@ -60,6 +60,59 @@ window.MLPlayer = (function () {
   let endedListeners = [];
   let timeUpdateListeners = [];
 
+  // ---------------------------------------------------------------
+  // Gapless handoff -- shared engine (static/js/gapless.js, MLGapless v2).
+  // audioEl is the ACTIVE element; the engine re-points it via onSwap on
+  // every handoff. If gapless.js failed to load, a minimal stand-in keeps
+  // plain playback working (no preload, no early handoff): a missing
+  // script must never take MLPlayer -- and with it every page -- down.
+  // ---------------------------------------------------------------
+  let upNext = null;          // Room Mode: track the SERVER says plays next (see setUpNext)
+  let pendingBlocked = null;  // Room Mode: current attemptAutoplay's onBlocked callback
+
+  function peekNextIndex() {
+    // What goNext() WOULD pick, without mutating shuffle state.
+    // -1 = unknown (end of queue, or shuffle about to rebuild).
+    if (queueIndex === -1) return -1;
+    if (shuffleOn) return shuffleOrder.length ? shuffleOrder[0] : -1;
+    return queueIndex + 1 < queue.length ? queueIndex + 1 : -1;
+  }
+
+  function peekNextRef() {
+    const i = peekNextIndex();
+    if (i !== -1 && queue[i]) return queue[i].rating_key;
+    return upNext ? upNext.rating_key : null;
+  }
+
+  const gapless = (function () {
+    try {
+      if (window.MLGapless) {
+        return MLGapless.create({
+          audio: audioEl,
+          urlFor: ref => `/stream/${ref}`,
+          nextRef: peekNextRef,
+          onSwap: el => { audioEl = el; },
+          onBlocked: () => { if (pendingBlocked) pendingBlocked(); },
+        });
+      }
+    } catch (e) {
+      console.error("MLPlayer: gapless engine failed to start (non-fatal), using plain playback:", e);
+    }
+    return {
+      on: (type, fn) => audioEl.addEventListener(type, fn),
+      start: ref => { audioEl.src = `/stream/${ref}`; audioEl.play().catch(() => { if (pendingBlocked) pendingBlocked(); }); },
+      refresh: () => {},
+    };
+  })();
+
+  function setUpNext(track) {
+    // Room Mode: the dashboard tells the engine which track the server
+    // will promote next (head of the room queue), so it can be preloaded
+    // and handed off to gaplessly. Pass null when nothing is queued.
+    upNext = track || null;
+    gapless.refresh();
+  }
+
   function notifyChange(isRehydration) {
     const current = getCurrent();
     changeListeners.forEach(cb => {
@@ -69,6 +122,7 @@ window.MLPlayer = (function () {
   }
 
   function updateNavButtons() {
+    gapless.refresh();   // queue/shuffle state just changed; re-aim the preload
     if (shuffleOn) {
       // With shuffle on, "prev" is valid whenever there's history,
       // "next" is valid whenever there's more queue left (or it can
@@ -85,7 +139,7 @@ window.MLPlayer = (function () {
     nowPlayingBar.hidden = false;
     npTitle.textContent = track.title;
     npArtist.textContent = track.artist;
-    npArt.src = `/art/${track.rating_key}`;
+    npArt.src = `/art/${track.rating_key}?w=128`;
     npPlayPause.classList.toggle("is-playing", isPlayingIcon !== false);
     updateMediaSessionMetadata(track);
     updateMediaSessionPlaybackState();
@@ -149,8 +203,7 @@ window.MLPlayer = (function () {
 
     queueIndex = index;
     const track = queue[queueIndex];
-    audioEl.src = `/stream/${track.rating_key}`;
-    audioEl.play().catch(() => {});
+    gapless.start(track.rating_key);
     renderNowPlaying(track);
     updateNavButtons();
     notifyChange();
@@ -417,7 +470,7 @@ window.MLPlayer = (function () {
   npVolume.addEventListener("input", () => { audioEl.volume = npVolume.value / 100; });
   audioEl.volume = npVolume.value / 100;
 
-  audioEl.addEventListener("ended", () => {
+  gapless.on("ended", () => {
     // Internal auto-advance for local-queue usage (Player, Playlists,
     // /linked). Room Mode's "queue" is server-authoritative, not a
     // local array -- attemptAutoplay() always sets a one-track queue,
@@ -437,7 +490,7 @@ window.MLPlayer = (function () {
     });
   });
 
-  audioEl.addEventListener("timeupdate", () => {
+  gapless.on("timeupdate", () => {
     const current = getCurrent();
     if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
       const duration = audioEl.duration;
@@ -486,12 +539,11 @@ window.MLPlayer = (function () {
     }
     queue = [track];
     queueIndex = 0;
-    audioEl.src = `/stream/${track.rating_key}`;
-    const p = audioEl.play();
+    pendingBlocked = onBlocked || null;
+    gapless.start(track.rating_key);   // hands off gaplessly when this is the preloaded up-next track
     renderNowPlaying(track);
     updateNavButtons();
     notifyChange();
-    if (p !== undefined) p.catch(() => { if (onBlocked) onBlocked(); });
   }
 
   function onChange(callback) {
@@ -510,6 +562,6 @@ window.MLPlayer = (function () {
     playTrack, playQueue, enqueue, playNext, pause, resume, isPaused, seekTo,
     getCurrent, getQueue, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
     jumpTo, removeFromQueue, reorderQueue, clearQueue,
-    onChange, onEnded, onTimeUpdate, attemptAutoplay,
+    onChange, onEnded, onTimeUpdate, attemptAutoplay, setUpNext,
   };
 })();
