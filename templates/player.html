@@ -46,6 +46,7 @@
     </div>
     <button id="tag-explore-btn" class="pl-btn pl-btn-mint">Explore</button>
     <button id="random-radio-btn" class="pl-btn pl-btn-mint" type="button">📻 Random Radio</button>
+    <button id="recent-mix-btn" class="pl-btn pl-btn-mint" type="button">🆕 Recently Added</button>
   </div>
 </section>
 
@@ -685,6 +686,28 @@ function bindMoodPill(btn) {
     loadResultsPage(true);
   });
 }
+const recentMixBtn = document.getElementById("recent-mix-btn");
+recentMixBtn.addEventListener("click", async () => {
+  if (recentMixBtn.disabled) return;
+  recentMixBtn.disabled = true;
+  const original = recentMixBtn.textContent;
+  try {
+    const r = await fetch("/api/player/recently-added-mix");
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.tracks || !data.tracks.length) {
+      recentMixBtn.textContent = data.error || "Couldn't build the mix";
+      setTimeout(() => { recentMixBtn.textContent = original; }, 4000);
+      return;
+    }
+    MLPlayer.playQueue(data.tracks, 0);
+  } catch (e) {
+    recentMixBtn.textContent = "Couldn't build the mix";
+    setTimeout(() => { recentMixBtn.textContent = original; }, 4000);
+  } finally {
+    recentMixBtn.disabled = false;
+  }
+});
+
 document.querySelectorAll(".mood-pill").forEach(bindMoodPill);
 
 // --- Moods row: real mood/energy tags when available -------------------

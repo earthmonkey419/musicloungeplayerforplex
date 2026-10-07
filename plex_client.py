@@ -383,6 +383,35 @@ def list_all_tracks():
     return [_track_to_dict(t) for t in tracks]
 
 
+def recently_added_tracks(days=14, limit=300, shuffle=True):
+    """Tracks Plex added within the last `days` days, for the Recently
+    Added mix. The whole window is gathered, shuffled (unless
+    shuffle=False, which keeps newest album first in disc/track order),
+    then capped at `limit` tracks."""
+    section = get_music_section()
+    tracks = section.search(
+        libtype="track",
+        filters={"addedAt>>": f"{int(days)}d"},
+        sort="addedAt:desc",
+        maxresults=limit * 10,
+    )
+    groups, order = {}, []
+    for t in tracks:
+        gk = t.parentRatingKey
+        if gk not in groups:
+            groups[gk] = []
+            order.append(gk)
+        groups[gk].append(t)
+    out = []
+    for gk in order:
+        for t in sorted(groups[gk], key=lambda x: (x.parentIndex or 0, x.index or 0)):
+            out.append(_track_to_dict(t))
+    if shuffle:
+        import random as _random
+        _random.shuffle(out)
+    return out[:limit]
+
+
 def list_all_playlists():
     """All actual music playlists in Plex (playlistType="audio" --
     same fix already applied in search_content(), otherwise a server

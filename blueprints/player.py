@@ -405,6 +405,25 @@ def _radio_start_random():
     })
 
 
+RECENT_MIX_DAYS = 14
+
+
+@bp.route("/api/player/recently-added-mix")
+@admin_required
+def api_recently_added_mix():
+    try:
+        tracks = plex_client.recently_added_tracks(days=RECENT_MIX_DAYS)
+    except Exception:
+        current_app.logger.exception("Recently added mix failed")
+        return _radio_error("Couldn't reach the music library. Try again in a moment.")
+    if not tracks:
+        return _radio_error(f"Nothing has been added in the last {RECENT_MIX_DAYS} days.")
+    return jsonify({
+        "tracks": tracks,
+        "label": f"Recently Added (last {RECENT_MIX_DAYS} days)",
+    })
+
+
 @bp.route("/api/player/radio/start", methods=["POST"])
 @admin_required
 def api_radio_start():
