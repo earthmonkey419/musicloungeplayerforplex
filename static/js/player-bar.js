@@ -124,13 +124,14 @@ window.MLPlayer = (function () {
   function updateNavButtons() {
     gapless.refresh();   // queue/shuffle state just changed; re-aim the preload
     if (shuffleOn) {
-      // With shuffle on, "prev" is valid whenever there's history,
-      // "next" is valid whenever there's more queue left (or it can
-      // reshuffle once exhausted) -- not simply index-based.
-      npPrev.disabled = shuffleHistory.length === 0;
+      // With shuffle on, "next" is valid whenever there's more queue left
+      // (or it can reshuffle once exhausted) -- not simply index-based.
+      // "prev" is valid whenever something is loaded: with no history to
+      // go back to it restarts the current track.
+      npPrev.disabled = queueIndex === -1;
       npNext.disabled = queue.length <= 1;
     } else {
-      npPrev.disabled = queueIndex <= 0;
+      npPrev.disabled = queueIndex === -1;   // on the first track, "prev" restarts it
       npNext.disabled = queueIndex >= queue.length - 1;
     }
   }
@@ -366,6 +367,16 @@ window.MLPlayer = (function () {
   }
 
   function goPrev() {
+    // Standard transport behavior (car stereos, lock screen, Plexamp): more
+    // than a few seconds in -- or with nothing earlier to go back to --
+    // "previous" restarts the current track; only near the start does it go
+    // to the previous one. Also what CarPlay/lock-screen "previoustrack" gets.
+    const PREV_RESTART_AFTER_S = 3;
+    const nothingEarlier = shuffleOn ? shuffleHistory.length === 0 : queueIndex <= 0;
+    if (queueIndex !== -1 && (audioEl.currentTime > PREV_RESTART_AFTER_S || nothingEarlier)) {
+      audioEl.currentTime = 0;
+      return;
+    }
     if (shuffleOn) {
       if (shuffleHistory.length > 0) {
         const prev = shuffleHistory.pop();
