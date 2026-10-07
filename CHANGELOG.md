@@ -25,7 +25,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Unified ⋯ menu: Start Room, Share Link, Go to Album, Play Next, Add to Playlist, Start Radio
 - Radio: continuous stations seeded from any track or album (⋯ menu → Start Radio); more tracks are added automatically as the queue runs low. Uses MusicMind's tag + Synapse similarity when available, falling back to Plex sonic analysis
 - Random Radio button on the Player search page (random tag-based station; random mood station without MusicMind)
-- Recently Added button on the Player search page: queues every track added to Plex in the last 14 days, newest album first
+- Recently Added button on the Player search page: plays a shuffled mix of every track added to Plex in the last 14 days
 - Album art thumbnail in Share emails
 - Installable PWA (manifest, Apple meta tags, home-screen icon, standalone mode)
 - Docker / Portainer support (Dockerfile, docker-compose.yml, `.env.example`)
@@ -35,6 +35,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Horizontal-scroll layout for pill rows on narrow screens, matching Recently Added's existing scroll-arrow pattern
 
 ### Changed
+- Previous (player bar, lock screen, CarPlay) now restarts the current track after 3 seconds, or when there is nothing earlier to go back to, instead of skipping back or being disabled; it stays enabled whenever a track is loaded, in both shuffle and non-shuffle modes
 - Room Mode now requires an explicit play to start instead of auto-playing on promotion
 - Player audio keeps going while browsing Room pages until a room actually exists
 - Clicking ▶ on a single track plays only that track instead of replacing the queue with the whole page
@@ -45,6 +46,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Guest- and recipient-facing pages (Room dashboard, Share, Settings, login) re-themed to match the Player palette
 
 ### Fixed
+- Gapless playback (v3): a late play() rejection from a superseded track change could undo a newer swap or trigger false blocked-playback handling, and stray audio could sound on the idle element. Each start now carries a generation counter, and a periodic guard silences anything that is not the active element
 - MusicMind fast path never activating (DB path pointed at a nonexistent file; all search/mood/browse had been using slow live-Plex fallbacks)
 - Share track search silently missing real multi-word titles
 - Search race condition where a slow earlier response could overwrite newer results (Player and Share)
