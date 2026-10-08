@@ -76,6 +76,7 @@
           <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.recipient_email or (s.delivery_method or "not sent yet") }}</td>
           <td style="padding:8px 6px;">
             {% if s.status == "live" %}
+            <button type="button" class="btn-secondary" data-copy-share="{{ s.share_token }}" style="padding:5px 10px; font-size:11px; margin-right:4px;">📋 Copy Link</button>
             <form method="post" action="{{ url_for('admin.stats_revoke_share') }}" onsubmit="return confirm('End this link? It will stop working immediately.');" style="display:inline;">
               <input type="hidden" name="token" value="{{ s.share_token }}">
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Link</button>
@@ -142,4 +143,35 @@
   <p style="color:var(--pl-text-secondary);">No rooms started yet.</p>
   {% endif %}
 </div>
+<script>
+(function () {
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return ok;
+  }
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-copy-share]");
+    if (!btn) return;
+    var url = window.location.origin + "/linked/" + btn.getAttribute("data-copy-share");
+    var original = btn.textContent;
+    function done() {
+      btn.textContent = "\u2713 Copied";
+      setTimeout(function () { btn.textContent = original; }, 1500);
+    }
+    function manual() { window.prompt("Copy this link:", url); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done).catch(function () {
+        if (legacyCopy(url)) done(); else manual();
+      });
+    } else if (legacyCopy(url)) { done(); } else { manual(); }
+  });
+})();
+</script>
 {% endblock %}

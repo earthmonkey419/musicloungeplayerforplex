@@ -133,6 +133,34 @@ def api_album_for_track(rating_key):
         return jsonify({"error": "Couldn't find that track's album."}), 404
 
 
+@bp.route("/api/artist-for-track/<rating_key>")
+@admin_required
+def api_artist_for_track(rating_key):
+    """Resolves a track's artist rating key for "Go to Artist". On VA /
+    compilation albums grandparentRatingKey is "Various Artists", so the
+    real per-track performer (originalTitle) is looked up by name first.
+    JSON lookup, not a redirect, for the same spa-nav.js reason as
+    api_album_for_track."""
+    try:
+        track = plex_client.get_plex().fetchItem(int(rating_key))
+        album_artist = (track.grandparentTitle or "").strip()
+        performer = (getattr(track, "originalTitle", None) or "").strip()
+        if performer and performer.lower() != album_artist.lower():
+            try:
+                matches = track.section().searchArtists(title=performer)
+            except Exception:
+                matches = []
+            for a in matches:
+                if (a.title or "").strip().lower() == performer.lower():
+                    return jsonify({"artist_rating_key": a.ratingKey})
+            if album_artist.lower() == "various artists":
+                return jsonify({"error": "No artist page found for %s." % performer}), 404
+        return jsonify({"artist_rating_key": track.grandparentRatingKey})
+    except Exception:
+        current_app.logger.exception("api_artist_for_track failed rating_key=%r", rating_key)
+        return jsonify({"error": "Couldn't find that track's artist."}), 404
+
+
 @bp.route("/album/<rating_key>")
 @admin_required
 def album_detail(rating_key):
