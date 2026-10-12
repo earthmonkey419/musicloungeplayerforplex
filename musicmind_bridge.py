@@ -173,6 +173,32 @@ def tracks_by_mood_page(mood_key, offset=0, limit=20, instrumental_only=False, s
     return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed, weight_key="play_count")
 
 
+MOOD_TAG_WORDS = {
+    "upbeat", "energetic", "mellow", "chill", "melancholy", "melancholic",
+    "nostalgic", "romantic", "dreamy", "dark", "moody", "relaxing",
+    "aggressive", "happy", "sad", "uplifting", "intense", "peaceful",
+    "soothing", "atmospheric", "haunting", "playful", "sensual", "epic",
+    "somber", "euphoric", "groovy", "sultry", "bittersweet", "calm",
+    "ethereal", "brooding", "cheerful", "triumphant", "wistful",
+    "hypnotic", "danceable", "sentimental", "gritty", "anthemic",
+    "introspective", "yearning", "tender",
+}
+
+
+def available_moods(min_count=21):
+    """Curated subset of available_tags() -- only the tags that are
+    genuine mood/energy descriptors per MOOD_TAG_WORDS, not genre
+    names. Same reliability bar and sort order as available_tags();
+    just filtered down to the allowlist afterward, so this never
+    queries the DB a second time. Returns None if MusicMind isn't
+    available (same contract as available_tags()) so the frontend can
+    fall back to its own small hardcoded set."""
+    all_tags = available_tags(min_count=min_count)
+    if all_tags is None:
+        return None
+    return [t for t in all_tags if t["tag"].lower() in MOOD_TAG_WORDS]
+
+
 def available_tags(min_count=21):
     """The library's most common, reliable tags from MusicMind's
     track_tags table -- far more granular than tracks.genre's 17

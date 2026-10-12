@@ -1,3 +1,7 @@
+import threading
+import time
+from collections import OrderedDict
+
 import requests
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, Response, stream_with_context, current_app
 
@@ -264,6 +268,27 @@ def api_skip():
     if err:
         return err
     db.touch_room(room_id)
+
+    body = request.get_json(silent=True) or {}
+    if body.get("auto") and session.get("is_admin"):
+        # Natural end-of-track from the HOST player (admin only -- guests
+        # never reach this branch). Idempotent: advances only if the track
+        # that ended is still the one playing, so a duplicate (second
+        # dashboard tab, retry, a manual skip that already advanced) is a
+        # harmless no-op instead of skipping a track. Exempt from the
+        # manual-skip rate limit, and doesn't feed it either.
+        from_ref = str(body.get("from") or "")
+        room = db.get_room(room_id)
+        if not from_ref or not room or str(room["now_playing_ref"] or "") != from_ref:
+            return jsonify({"ok": True, "noop": True})
+        nxt = db.pop_next(room_id)
+        if nxt:
+            db.set_now_playing(room_id, db.queue_row_to_track(nxt))
+        else:
+            db.set_play_state(room_id, False)
+        db.log_action(room_id, "auto_advance")
+        return jsonify({"ok": True})
+
     if not db.can_skip(room_id):
         return jsonify({"error": "Skipping too fast -- try again in a moment."}), 429
     db.record_skip(room_id)
@@ -304,26 +329,119 @@ def api_volume():
     return jsonify({"ok": True, "volume": clamped})
 
 
-@bp.route("/art/<rating_key>")
-def art(rating_key):
-    try:
-        thumb_path = plex_client.track_art_path(rating_key)
-        if not thumb_path:
-            return "", 404
-    except Exception:
-        return "", 404
+# --- Cover art: resized + cached ------------------------------------------
+#
+# Every track row / album tile fetches /art/<key>. Uncached, each one
+# cost a Plex metadata round trip PLUS a full-size image download,
+# buffered in memory, on a single 4-thread worker -- so a page with
+# dozens of tiles (the home page's Recently Added row) queued its own
+# startup API calls behind cover art. Now:
+#   * ?w=<128|300|600> asks Plex's photo transcoder for a right-sized
+#     image (a 44px thumbnail no longer downloads a 1000px cover);
+#     no ?w= keeps the original behavior (full-size), so email
+#     thumbnails / lock-screen art callers are unaffected.
+#   * A small in-process LRU keeps the resulting bytes (and skips the
+#     metadata lookup entirely on a hit). Single gunicorn worker, so
+#     one dict is the right scope -- same assumption as result_cache.
+_ART_WIDTHS = (128, 300, 600)
+_ART_TTL = 24 * 3600          # covers rarely change
+_ART_MISS_TTL = 600           # remember "no art" briefly, not forever
+_ART_MAX_BYTES = 48 * 1024 * 1024
+_art_cache = OrderedDict()    # (rating_key, width) -> (ts, content_type|None, bytes|None)
+_art_cache_bytes = 0
+_art_lock = threading.Lock()
+_plex_http = requests.Session()   # keep-alive to Plex instead of a new connection per image
 
-    plex_url = f"{config.PLEX_URL}{thumb_path}?X-Plex-Token={config.PLEX_TOKEN}"
-    try:
-        upstream = requests.get(plex_url, timeout=6)
-    except Exception:
-        return "", 502
-    if upstream.status_code != 200:
-        return "", 404
 
-    resp = Response(upstream.content, content_type=upstream.headers.get("Content-Type", "image/jpeg"))
+def _art_cache_get(key):
+    global _art_cache_bytes
+    with _art_lock:
+        entry = _art_cache.get(key)
+        if entry is None:
+            return None
+        ts, ctype, data = entry
+        ttl = _ART_TTL if data is not None else _ART_MISS_TTL
+        if time.time() - ts > ttl:
+            _art_cache.pop(key, None)
+            _art_cache_bytes -= len(data or b"")
+            return None
+        _art_cache.move_to_end(key)
+        return entry
+
+
+def _art_cache_put(key, ctype, data):
+    global _art_cache_bytes
+    with _art_lock:
+        old = _art_cache.pop(key, None)
+        if old is not None:
+            _art_cache_bytes -= len(old[2] or b"")
+        _art_cache[key] = (time.time(), ctype, data)
+        _art_cache_bytes += len(data or b"")
+        while _art_cache_bytes > _ART_MAX_BYTES and _art_cache:
+            _, (_, _, dropped) = _art_cache.popitem(last=False)
+            _art_cache_bytes -= len(dropped or b"")
+
+
+def _art_response(ctype, data):
+    resp = Response(data, content_type=ctype or "image/jpeg")
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp
+
+
+@bp.route("/art/<rating_key>")
+def art(rating_key):
+    width = request.args.get("w", type=int)
+    if width not in _ART_WIDTHS:
+        width = None
+    key = (str(rating_key), width)
+
+    hit = _art_cache_get(key)
+    if hit is not None:
+        _, ctype, data = hit
+        return ("", 404) if data is None else _art_response(ctype, data)
+
+    try:
+        thumb_path = plex_client.track_art_path(rating_key)
+    except Exception:
+        return "", 404
+    if not thumb_path:
+        _art_cache_put(key, None, None)
+        return "", 404
+
+    upstream = None
+    if width:
+        try:
+            upstream = _plex_http.get(
+                f"{config.PLEX_URL}/photo/:/transcode",
+                params={
+                    "url": thumb_path,
+                    "width": width,
+                    "height": width,
+                    "minSize": 1,
+                    "upscale": 0,
+                    "X-Plex-Token": config.PLEX_TOKEN,
+                },
+                timeout=6,
+            )
+            if upstream.status_code != 200:
+                upstream = None  # fall back to the original below
+        except Exception:
+            upstream = None
+
+    if upstream is None:
+        try:
+            upstream = _plex_http.get(
+                f"{config.PLEX_URL}{thumb_path}?X-Plex-Token={config.PLEX_TOKEN}",
+                timeout=6,
+            )
+        except Exception:
+            return "", 502
+        if upstream.status_code != 200:
+            return "", 404
+
+    ctype = upstream.headers.get("Content-Type", "image/jpeg")
+    _art_cache_put(key, ctype, upstream.content)
+    return _art_response(ctype, upstream.content)
 
 
 @bp.route("/stream/<rating_key>")

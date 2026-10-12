@@ -2,8 +2,6 @@
    Hierarchy rule (do not break): mint = environment, cream = surface,
    gold = selection/state, orange = action. Never even coverage. */
 
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
-
 :root {
   --mint: #70FFD2;
   --mint-deep: #4FE0B8;

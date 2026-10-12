@@ -32,14 +32,17 @@
       return;
     }
 
-    queue.forEach((t, i) => {
+    const shuffled = MLPlayer.isShuffleOn() && typeof MLPlayer.getDisplayOrder === "function";
+    const order = shuffled ? MLPlayer.getDisplayOrder() : queue.map((_, k) => k);
+    order.forEach((i) => {
+      const t = queue[i];
       const li = document.createElement("li");
       li.className = "track-row" + (i === currentIndex ? " queue-modal-current" : "");
-      li.draggable = true;
+      li.draggable = !shuffled;
       li.dataset.index = i;
       li.innerHTML = `
         <span class="track-drag-handle" title="Drag to reorder">⋮⋮</span>
-        <img class="track-art" src="/art/${t.rating_key}" alt="">
+        <img class="track-art" src="/art/${t.rating_key}?w=128" alt="" loading="lazy" decoding="async">
         <div class="track-meta">
           <div class="track-title">${i === currentIndex ? "▶ " : ""}${t.title}</div>
           <div class="track-artist">${t.artist}</div>
@@ -56,10 +59,14 @@
         MLPlayer.removeFromQueue(i);
         renderQueueModal();
       });
+      if (shuffled) {
+        const h = li.querySelector(".track-drag-handle");
+        if (h) h.style.visibility = "hidden";
+      }
       list.appendChild(li);
     });
 
-    wireDragReorder();
+    if (!shuffled) wireDragReorder();
   }
 
   function wireDragReorder() {

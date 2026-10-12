@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}MusicLounge{% endblock %}</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/player.css') }}">
 
@@ -29,6 +32,7 @@
 
   {% if needs_audio_bar or player_family %}
   {% include "partials/_now_playing_bar.html" %}
+  <script src="{{ url_for('static', filename='js/gapless.js') }}"></script>
   <script src="{{ url_for('static', filename='js/player-bar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/queue-view.js') }}"></script>
   {% endif %}

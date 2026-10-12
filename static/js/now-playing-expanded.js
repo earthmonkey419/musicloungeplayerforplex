@@ -97,4 +97,27 @@
     close();
     document.getElementById("np-queue-btn").click();
   });
+
+  // --- More menu: reuses the shared track popover (room-share-menu.js) ---
+  const shareBtn = document.getElementById("npx-share");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cur = MLPlayer.getCurrent();
+      if (!cur || !cur.track || typeof window.openRoomShareMenu !== "function") return;
+      window.openRoomShareMenu(shareBtn, {
+        type: "track",
+        ref: cur.track.rating_key,
+        title: cur.track.title,
+        artist: cur.track.artist,
+        compact: true
+      });
+    });
+    // Items that navigate or open a modal need the overlay out of the way.
+    document.addEventListener("click", (e) => {
+      const it = e.target.closest(".room-share-popover-item");
+      if (!it || overlay.hidden) return;
+      if (["album", "artist", "addplaylist", "room", "share"].indexOf(it.dataset.action) !== -1) close();
+    }, true);
+  }
 })();

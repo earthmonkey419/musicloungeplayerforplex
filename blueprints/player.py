@@ -16,7 +16,7 @@ def index():
     playlists = [dict(p) for p in db.list_playlists()]
     recent_plays = [dict(p) for p in db.get_recent_plays(limit=10)]
     try:
-        recent_albums = library_browse.browse_albums_page(offset=0, limit=50, sort="added")["results"]
+        recent_albums = library_browse.browse_albums_page(offset=0, limit=30, sort="added")["results"]
     except Exception:
         current_app.logger.exception("Recently added albums failed")
         recent_albums = []
@@ -196,6 +196,22 @@ def api_tags():
     except Exception:
         current_app.logger.exception("Tag list lookup failed")
         return jsonify({"tags": []})
+
+
+@bp.route("/api/player/moods")
+@admin_required
+def api_moods():
+    """Lists the library's genuine mood/energy tags (see
+    musicmind_bridge.MOOD_TAG_WORDS) for the Moods pill row. Empty
+    list (not an error) when MusicMind isn't configured or none of
+    the curated words are present -- the frontend falls back to its
+    own small hardcoded genre-based set rather than showing nothing."""
+    try:
+        moods = musicmind_bridge.available_moods()
+        return jsonify({"moods": moods or []})
+    except Exception:
+        current_app.logger.exception("Mood list lookup failed")
+        return jsonify({"moods": []})
 
 
 @bp.route("/api/player/tag")
@@ -386,6 +402,25 @@ def _radio_start_random():
         "seeds": [],
         "label": f"Random Radio: {mood}",
         "ctx": {"mode": "mood", "mood": mood},
+    })
+
+
+RECENT_MIX_DAYS = 14
+
+
+@bp.route("/api/player/recently-added-mix")
+@admin_required
+def api_recently_added_mix():
+    try:
+        tracks = plex_client.recently_added_tracks(days=RECENT_MIX_DAYS)
+    except Exception:
+        current_app.logger.exception("Recently added mix failed")
+        return _radio_error("Couldn't reach the music library. Try again in a moment.")
+    if not tracks:
+        return _radio_error(f"Nothing has been added in the last {RECENT_MIX_DAYS} days.")
+    return jsonify({
+        "tracks": tracks,
+        "label": f"Recently Added (last {RECENT_MIX_DAYS} days)",
     })
 
 

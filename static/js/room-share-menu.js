@@ -30,6 +30,9 @@
     const albumBtn = item.type === "track"
       ? '<button class="room-share-popover-item" data-action="album">💿 Go to Album</button>'
       : "";
+    const artistBtn = item.type === "track"
+      ? '<button class="room-share-popover-item" data-action="artist">🎤 Go to Artist</button>'
+      : "";
     const radioBtn = (item.type === "track" || item.type === "album") && window.MLRadio
       ? '<button class="room-share-popover-item" data-action="radio" hidden>📻 Start Radio</button>'
       : "";
@@ -55,16 +58,27 @@
       ${addPlaylistBtn}
       <button class="room-share-popover-item" data-action="room">📡 Start a Room</button>
       <button class="room-share-popover-item" data-action="share">🔗 Share a Link</button>
+      ${artistBtn}
       ${albumBtn}
       ${radioBtn}
       <div class="room-share-popover-status" hidden></div>
     `;
     document.body.appendChild(menu);
+    if (item.compact) {
+      ["playnext", "enqueue", "addplaylist"].forEach((a) => {
+        const el = menu.querySelector('[data-action="' + a + '"]');
+        if (el) { el.hidden = true; el.style.display = "none"; }
+      });
+    }
 
     const rect = anchorEl.getBoundingClientRect();
     menu.style.position = "fixed";
     menu.style.top = `${rect.bottom + 4}px`;
     menu.style.left = `${Math.max(8, rect.right - menu.offsetWidth)}px`;
+    menu.style.zIndex = "10000";
+    if (rect.bottom + 4 + menu.offsetHeight > window.innerHeight - 8) {
+      menu.style.top = `${Math.max(8, rect.top - menu.offsetHeight - 4)}px`;
+    }
 
     openMenuEl = menu;
 
@@ -187,6 +201,29 @@
       });
     }
 
+    const artistTrigger = menu.querySelector('[data-action="artist"]');
+    if (artistTrigger) {
+      artistTrigger.addEventListener("click", () => {
+        showStatus("Loading artist…");
+        fetch(`/browse/api/artist-for-track/${item.ref}`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.artist_rating_key) {
+              showStatus(data.error || "Couldn't find that track's artist.", true);
+              return;
+            }
+            // Same real-<a>-click pattern as Go to Album, so spa-nav.js
+            // handles it and playback survives the jump.
+            const link = document.createElement("a");
+            link.href = `/browse/artist/${data.artist_rating_key}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+          })
+          .catch(() => showStatus("Something went wrong.", true));
+      });
+    }
+
     menu.querySelector('[data-action="room"]').addEventListener("click", () => {
       showStatus("Starting room…");
       fetch("/admin/room/send-content", {
@@ -222,12 +259,38 @@
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
           if (ok && data.ok) {
-            navigator.clipboard.writeText(data.share_url).then(() => {
-              showStatus("Link copied!");
-            }).catch(() => {
-              showStatus("Link created (couldn't auto-copy)");
-            });
-            setTimeout(closeMenu, 1800);
+            const url = data.share_url;
+            const showManual = () => {
+              menu.innerHTML =
+                '<div class="room-share-popover-status">Link created. Tap Copy:</div>' +
+                '<input class="room-share-link-input" readonly ' +
+                'style="width:92%;margin:6px 4%;padding:6px;font-size:13px;box-sizing:border-box;">' +
+                '<button class="room-share-popover-item" data-action="copylink">📋 Copy link</button>';
+              const inp = menu.querySelector("input");
+              const btn = menu.querySelector('[data-action="copylink"]');
+              inp.value = url;
+              inp.focus(); inp.select();
+              btn.addEventListener("click", () => {
+                const ok = () => { btn.textContent = "✓ Copied"; setTimeout(closeMenu, 1200); };
+                const legacy = () => {
+                  inp.focus(); inp.select(); inp.setSelectionRange(0, 99999);
+                  let good = false;
+                  try { good = document.execCommand("copy"); } catch (e) {}
+                  if (good) ok(); else btn.textContent = "Press and hold the link to copy";
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(url).then(ok).catch(legacy);
+                } else { legacy(); }
+              });
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(url).then(() => {
+                showStatus("Link copied!");
+                setTimeout(closeMenu, 1800);
+              }).catch(showManual);
+            } else {
+              showManual();
+            }
           } else {
             showStatus((data && data.error) || "Couldn't create a link.", true);
           }

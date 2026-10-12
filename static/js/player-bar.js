@@ -40,7 +40,7 @@
  * on the page before this script runs.
  */
 window.MLPlayer = (function () {
-  const audioEl = document.getElementById("audio-el");
+  let audioEl = document.getElementById("audio-el"); // ACTIVE element; MLGapless swaps it on handoff
   const nowPlayingBar = document.getElementById("now-playing-bar");
   const npTitle = document.getElementById("np-title");
   const npArtist = document.getElementById("np-artist");
@@ -60,6 +60,59 @@ window.MLPlayer = (function () {
   let endedListeners = [];
   let timeUpdateListeners = [];
 
+  // ---------------------------------------------------------------
+  // Gapless handoff -- shared engine (static/js/gapless.js, MLGapless v2).
+  // audioEl is the ACTIVE element; the engine re-points it via onSwap on
+  // every handoff. If gapless.js failed to load, a minimal stand-in keeps
+  // plain playback working (no preload, no early handoff): a missing
+  // script must never take MLPlayer -- and with it every page -- down.
+  // ---------------------------------------------------------------
+  let upNext = null;          // Room Mode: track the SERVER says plays next (see setUpNext)
+  let pendingBlocked = null;  // Room Mode: current attemptAutoplay's onBlocked callback
+
+  function peekNextIndex() {
+    // What goNext() WOULD pick, without mutating shuffle state.
+    // -1 = unknown (end of queue, or shuffle about to rebuild).
+    if (queueIndex === -1) return -1;
+    if (shuffleOn) return shuffleOrder.length ? shuffleOrder[0] : -1;
+    return queueIndex + 1 < queue.length ? queueIndex + 1 : -1;
+  }
+
+  function peekNextRef() {
+    const i = peekNextIndex();
+    if (i !== -1 && queue[i]) return queue[i].rating_key;
+    return upNext ? upNext.rating_key : null;
+  }
+
+  const gapless = (function () {
+    try {
+      if (window.MLGapless) {
+        return MLGapless.create({
+          audio: audioEl,
+          urlFor: ref => `/stream/${ref}`,
+          nextRef: peekNextRef,
+          onSwap: el => { audioEl = el; },
+          onBlocked: () => { if (pendingBlocked) pendingBlocked(); },
+        });
+      }
+    } catch (e) {
+      console.error("MLPlayer: gapless engine failed to start (non-fatal), using plain playback:", e);
+    }
+    return {
+      on: (type, fn) => audioEl.addEventListener(type, fn),
+      start: ref => { audioEl.src = `/stream/${ref}`; audioEl.play().catch(() => { if (pendingBlocked) pendingBlocked(); }); },
+      refresh: () => {},
+    };
+  })();
+
+  function setUpNext(track) {
+    // Room Mode: the dashboard tells the engine which track the server
+    // will promote next (head of the room queue), so it can be preloaded
+    // and handed off to gaplessly. Pass null when nothing is queued.
+    upNext = track || null;
+    gapless.refresh();
+  }
+
   function notifyChange(isRehydration) {
     const current = getCurrent();
     changeListeners.forEach(cb => {
@@ -69,14 +122,16 @@ window.MLPlayer = (function () {
   }
 
   function updateNavButtons() {
+    gapless.refresh();   // queue/shuffle state just changed; re-aim the preload
     if (shuffleOn) {
-      // With shuffle on, "prev" is valid whenever there's history,
-      // "next" is valid whenever there's more queue left (or it can
-      // reshuffle once exhausted) -- not simply index-based.
-      npPrev.disabled = shuffleHistory.length === 0;
+      // With shuffle on, "next" is valid whenever there's more queue left
+      // (or it can reshuffle once exhausted) -- not simply index-based.
+      // "prev" is valid whenever something is loaded: with no history to
+      // go back to it restarts the current track.
+      npPrev.disabled = queueIndex === -1;
       npNext.disabled = queue.length <= 1;
     } else {
-      npPrev.disabled = queueIndex <= 0;
+      npPrev.disabled = queueIndex === -1;   // on the first track, "prev" restarts it
       npNext.disabled = queueIndex >= queue.length - 1;
     }
   }
@@ -85,7 +140,7 @@ window.MLPlayer = (function () {
     nowPlayingBar.hidden = false;
     npTitle.textContent = track.title;
     npArtist.textContent = track.artist;
-    npArt.src = `/art/${track.rating_key}`;
+    npArt.src = `/art/${track.rating_key}?w=128`;
     npPlayPause.classList.toggle("is-playing", isPlayingIcon !== false);
     updateMediaSessionMetadata(track);
     updateMediaSessionPlaybackState();
@@ -149,8 +204,7 @@ window.MLPlayer = (function () {
 
     queueIndex = index;
     const track = queue[queueIndex];
-    audioEl.src = `/stream/${track.rating_key}`;
-    audioEl.play().catch(() => {});
+    gapless.start(track.rating_key);
     renderNowPlaying(track);
     updateNavButtons();
     notifyChange();
@@ -313,6 +367,16 @@ window.MLPlayer = (function () {
   }
 
   function goPrev() {
+    // Standard transport behavior (car stereos, lock screen, Plexamp): more
+    // than a few seconds in -- or with nothing earlier to go back to --
+    // "previous" restarts the current track; only near the start does it go
+    // to the previous one. Also what CarPlay/lock-screen "previoustrack" gets.
+    const PREV_RESTART_AFTER_S = 3;
+    const nothingEarlier = shuffleOn ? shuffleHistory.length === 0 : queueIndex <= 0;
+    if (queueIndex !== -1 && (audioEl.currentTime > PREV_RESTART_AFTER_S || nothingEarlier)) {
+      audioEl.currentTime = 0;
+      return;
+    }
     if (shuffleOn) {
       if (shuffleHistory.length > 0) {
         const prev = shuffleHistory.pop();
@@ -331,6 +395,25 @@ window.MLPlayer = (function () {
       rebuildShuffleOrder();
     }
     updateNavButtons();
+    notifyChange();   // queue view re-renders in the new (shuffled/unshuffled) order
+  }
+
+  function getDisplayOrder() {
+    // Real queue indices in the order the Queue modal should show them:
+    // played (shuffle history), current, upcoming (shuffleOrder), then
+    // any stragglers. Unshuffled = plain queue order.
+    const all = queue.map((_, i) => i);
+    if (!shuffleOn || queueIndex === -1) return all;
+    const seen = new Set();
+    const out = [];
+    const add = (i) => {
+      if (i >= 0 && i < queue.length && !seen.has(i)) { seen.add(i); out.push(i); }
+    };
+    shuffleHistory.filter(i => i !== queueIndex).forEach(add);
+    add(queueIndex);
+    shuffleOrder.forEach(add);
+    all.forEach(add);
+    return out;
   }
 
   function getCurrent() {
@@ -417,7 +500,7 @@ window.MLPlayer = (function () {
   npVolume.addEventListener("input", () => { audioEl.volume = npVolume.value / 100; });
   audioEl.volume = npVolume.value / 100;
 
-  audioEl.addEventListener("ended", () => {
+  gapless.on("ended", () => {
     // Internal auto-advance for local-queue usage (Player, Playlists,
     // /linked). Room Mode's "queue" is server-authoritative, not a
     // local array -- attemptAutoplay() always sets a one-track queue,
@@ -437,7 +520,7 @@ window.MLPlayer = (function () {
     });
   });
 
-  audioEl.addEventListener("timeupdate", () => {
+  gapless.on("timeupdate", () => {
     const current = getCurrent();
     if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
       const duration = audioEl.duration;
@@ -486,12 +569,11 @@ window.MLPlayer = (function () {
     }
     queue = [track];
     queueIndex = 0;
-    audioEl.src = `/stream/${track.rating_key}`;
-    const p = audioEl.play();
+    pendingBlocked = onBlocked || null;
+    gapless.start(track.rating_key);   // hands off gaplessly when this is the preloaded up-next track
     renderNowPlaying(track);
     updateNavButtons();
     notifyChange();
-    if (p !== undefined) p.catch(() => { if (onBlocked) onBlocked(); });
   }
 
   function onChange(callback) {
@@ -508,8 +590,8 @@ window.MLPlayer = (function () {
 
   return {
     playTrack, playQueue, enqueue, playNext, pause, resume, isPaused, seekTo,
-    getCurrent, getQueue, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
+    getCurrent, getQueue, getDisplayOrder, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
     jumpTo, removeFromQueue, reorderQueue, clearQueue,
-    onChange, onEnded, onTimeUpdate, attemptAutoplay,
+    onChange, onEnded, onTimeUpdate, attemptAutoplay, setUpNext,
   };
 })();

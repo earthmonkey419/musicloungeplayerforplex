@@ -9,7 +9,7 @@
 <div class="browse-grid">
   {% for album in albums %}
   <a class="browse-tile" href="{{ url_for('browse.album_detail', rating_key=album['rating_key']) }}">
-    <img class="browse-tile-art" src="/art/{{ album['rating_key'] }}" alt="" onerror="this.style.visibility='hidden'">
+    <img class="browse-tile-art" src="/art/{{ album['rating_key'] }}?w=300" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">
     <div class="browse-tile-title">{{ album['title'] }}</div>
     <div class="browse-tile-subtitle">{{ album['year'] or '' }}{% if album['year'] and album['track_count'] %} · {% endif %}{% if album['track_count'] %}{{ album['track_count'] }} tracks{% endif %}</div>
   </a>

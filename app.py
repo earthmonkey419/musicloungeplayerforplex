@@ -23,6 +23,8 @@ Each deployment (musiclounge.vp-fun.com and mlplayer.vp-fun.com) runs
 its own independent instance/DB of this code; they don't talk to
 each other at runtime.
 """
+import os
+
 from flask import Flask, request
 from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime, timedelta
@@ -63,6 +65,22 @@ def create_app():
     app.register_blueprint(linked_bp, url_prefix="/linked")
     app.register_blueprint(browse_bp, url_prefix="/browse")
 
+    @app.url_defaults
+    def add_static_version(endpoint, values):
+        # Cache-busting for url_for('static', ...): appends ?v=<file
+        # mtime>. A deploy changes the mtime, so the URL changes and
+        # browsers/Cloudflare fetch the new file immediately -- which
+        # is what lets static files be cached hard (see after_request
+        # below) without the "deploys take 4 hours to arrive" problem
+        # the old blanket no-store was working around.
+        if endpoint == "static" and "v" not in values:
+            filename = values.get("filename")
+            if filename:
+                try:
+                    values["v"] = int(os.stat(os.path.join(app.static_folder, filename)).st_mtime)
+                except OSError:
+                    pass
+
     @app.after_request
     def no_store(response):
         # Scoped to /static/ specifically now, not fully unconditional
@@ -85,8 +103,19 @@ def create_app():
         # signal to respect there); every other route's own explicit
         # Cache-Control is now left alone.
         if request.path.startswith("/static/"):
-            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-            response.headers["Pragma"] = "no-cache"
+            if request.args.get("v"):
+                # Versioned URL (every url_for('static') link, via
+                # add_static_version above): safe to cache for a year,
+                # since any change to the file changes the URL.
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                response.headers.pop("Pragma", None)
+            else:
+                # Unversioned direct paths (site.webmanifest's icon
+                # URLs, /static/favicon.ico probes): always revalidate,
+                # but as a cheap conditional request (Flask supplies
+                # ETag/Last-Modified -> 304) instead of a full
+                # re-download on every load.
+                response.headers["Cache-Control"] = "no-cache"
         elif "Cache-Control" not in response.headers:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"

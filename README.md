@@ -108,7 +108,7 @@ Every setting is documented in `config.example.py`. The essentials:
 | Variable | What it's for |
 |---|---|
 | `PLEX_URL` | Your Plex server's URL (e.g. `http://192.168.1.x:32400`) |
-| `PLEX_TOKEN` | A Plex auth token — see [Plex's own guide](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) |
+| `PLEX_TOKEN` | A dedicated Plex token — create one with `python3 make_plex_token.py` (see below) |
 | `MUSIC_LIB` | The name of your Music library in Plex |
 | `ADMIN_PASSWORD` | The password for the single admin account this app uses |
 | `SECRET_KEY` | Any long random string, used for session security |
@@ -118,6 +118,21 @@ Optional integrations (fully functional with nothing else configured; these just
 - **Last.fm scrobbling** — `LASTFM_API_KEY` / `LASTFM_API_SECRET` ([get a key](https://www.last.fm/api/account/create)), then connect your account once from Settings
 - **MusicMind bridge** — `MUSICMIND_DB_PATH`, an optional read-only companion database. Fully optional (everything falls back to live Plex queries with no missing functionality), but when connected it meaningfully accelerates search, mood/genre browsing, and Track browsing — MusicMind's own real genre data also powers the Genres pill row on the search page.
 - **SMTP** — for emailing Share Mode links directly instead of just copying them
+
+**Getting a Plex token (recommended):** give MusicLounge Player its own. On any
+machine with Python (`pip install plexapi requests`, or inside the app's
+venv), run `python3 make_plex_token.py` from the app folder, open the link it
+prints, sign in to Plex and approve. It registers a device named "MusicLounge Player"
+under Plex's Authorized Devices and prints the token to use as `PLEX_TOKEN`.
+Add `--write` to have it update `config.py` and/or `.env` for you (the old
+files are kept as `<name>.bak-<timestamp>`). Then restart the app
+(`pm2 restart mlplayer`, or `docker compose up -d`).
+
+Why not copy a token out of Plex Web? A token taken from the browser belongs
+to that browser session and stops working the moment you sign out of it,
+taking the app with it. Don't remove the "MusicLounge Player" entry from Authorized
+Devices, and give each of your apps its own token. (Plex's
+[manual guide](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/) still works if you prefer.)
 
 ## Architecture notes
 

@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-11
+
 ### Added
 - Unified `MLPlayer` audio engine shared by Player, Playlists, Room Mode, and Share links
 - Persistent playback across navigation (Player, Playlists, Browse); audio no longer stops when changing pages
@@ -25,15 +27,26 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Unified ⋯ menu: Start Room, Share Link, Go to Album, Play Next, Add to Playlist, Start Radio
 - Radio: continuous stations seeded from any track or album (⋯ menu → Start Radio); more tracks are added automatically as the queue runs low. Uses MusicMind's tag + Synapse similarity when available, falling back to Plex sonic analysis
 - Random Radio button on the Player search page (random tag-based station; random mood station without MusicMind)
+- Recently Added button on the Player search page: plays a shuffled mix of every track added to Plex in the last 14 days
 - Album art thumbnail in Share emails
 - Installable PWA (manifest, Apple meta tags, home-screen icon, standalone mode)
 - Docker / Portainer support (Dockerfile, docker-compose.yml, `.env.example`)
 - README with Docker and manual setup, plus in-app Help page (`/help`)
 - MIT license
+- Curated Moods pill row backed by real MusicMind mood/energy tags (replacing genre-mislabeled buttons like Funk/Soul/Jazz), with an honest "Genres" fallback label when MusicMind isn't available
+- Horizontal-scroll layout for pill rows on narrow screens, matching Recently Added's existing scroll-arrow pattern
+- Cache-busted static files: every `url_for('static')` link carries `?v=<mtime>` and is cached for a year, so deploys reach browsers and Cloudflare immediately
+- Resized, cached cover art: `/art/<key>?w=128|300|600` uses Plex's photo transcoder with an in-process LRU cache and keep-alive connections to Plex
+- Gapless playback: the next track is preloaded and handed off between two audio elements (`static/js/gapless.js`), removing the audible gap between tracks
+- `make_plex_token.py`: generates a dedicated Plex token for the app instead of copying one from Plex Web
+- Now Playing share menu, with Go to Artist, a copy-link fallback, and a Settings re-copy option
 
 ### Changed
+- Previous (player bar, lock screen, CarPlay) now restarts the current track after 3 seconds, or when there is nothing earlier to go back to, instead of skipping back or being disabled; it stays enabled whenever a track is loaded, in both shuffle and non-shuffle modes
 - Room Mode now requires an explicit play to start instead of auto-playing on promotion
 - Player audio keeps going while browsing Room pages until a room actually exists
+- Queue view now shows the true shuffle order (played, current, upcoming) while shuffle is on; drag-reorder is disabled in that view
+- Home page Recently Added row loads 30 albums instead of 50
 - Clicking ▶ on a single track plays only that track instead of replacing the queue with the whole page
 - Playlist search/import scoped to audio only
 - Share Mode album and track search now use MusicMind first, falling back to live Plex (album search went from 24+ seconds to sub-second)
@@ -42,6 +55,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 - Guest- and recipient-facing pages (Room dashboard, Share, Settings, login) re-themed to match the Player palette
 
 ### Fixed
+- Gapless playback (v3): a late play() rejection from a superseded track change could undo a newer swap or trigger false blocked-playback handling, and stray audio could sound on the idle element. Each start now carries a generation counter, and a periodic guard silences anything that is not the active element
 - MusicMind fast path never activating (DB path pointed at a nonexistent file; all search/mood/browse had been using slow live-Plex fallbacks)
 - Share track search silently missing real multi-word titles
 - Search race condition where a slow earlier response could overwrite newer results (Player and Share)
