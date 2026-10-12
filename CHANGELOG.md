@@ -33,11 +33,18 @@ this project uses [Semantic Versioning](https://semver.org/).
 - MIT license
 - Curated Moods pill row backed by real MusicMind mood/energy tags (replacing genre-mislabeled buttons like Funk/Soul/Jazz), with an honest "Genres" fallback label when MusicMind isn't available
 - Horizontal-scroll layout for pill rows on narrow screens, matching Recently Added's existing scroll-arrow pattern
+- Cache-busted static files: every `url_for('static')` link carries `?v=<mtime>` and is cached for a year, so deploys reach browsers and Cloudflare immediately
+- Resized, cached cover art: `/art/<key>?w=128|300|600` uses Plex's photo transcoder with an in-process LRU cache and keep-alive connections to Plex
+- Gapless playback: the next track is preloaded and handed off between two audio elements (`static/js/gapless.js`), removing the audible gap between tracks
+- `make_plex_token.py`: generates a dedicated Plex token for the app instead of copying one from Plex Web
+- Now Playing share menu, with Go to Artist, a copy-link fallback, and a Settings re-copy option
 
 ### Changed
 - Previous (player bar, lock screen, CarPlay) now restarts the current track after 3 seconds, or when there is nothing earlier to go back to, instead of skipping back or being disabled; it stays enabled whenever a track is loaded, in both shuffle and non-shuffle modes
 - Room Mode now requires an explicit play to start instead of auto-playing on promotion
 - Player audio keeps going while browsing Room pages until a room actually exists
+- Queue view now shows the true shuffle order (played, current, upcoming) while shuffle is on; drag-reorder is disabled in that view
+- Home page Recently Added row loads 30 albums instead of 50
 - Clicking ▶ on a single track plays only that track instead of replacing the queue with the whole page
 - Playlist search/import scoped to audio only
 - Share Mode album and track search now use MusicMind first, falling back to live Plex (album search went from 24+ seconds to sub-second)
