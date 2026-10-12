@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-11
+
 ### Added
 - Unified `MLPlayer` audio engine shared by Player, Playlists, Room Mode, and Share links
 - Persistent playback across navigation (Player, Playlists, Browse); audio no longer stops when changing pages
