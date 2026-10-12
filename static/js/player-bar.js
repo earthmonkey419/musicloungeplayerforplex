@@ -395,6 +395,25 @@ window.MLPlayer = (function () {
       rebuildShuffleOrder();
     }
     updateNavButtons();
+    notifyChange();   // queue view re-renders in the new (shuffled/unshuffled) order
+  }
+
+  function getDisplayOrder() {
+    // Real queue indices in the order the Queue modal should show them:
+    // played (shuffle history), current, upcoming (shuffleOrder), then
+    // any stragglers. Unshuffled = plain queue order.
+    const all = queue.map((_, i) => i);
+    if (!shuffleOn || queueIndex === -1) return all;
+    const seen = new Set();
+    const out = [];
+    const add = (i) => {
+      if (i >= 0 && i < queue.length && !seen.has(i)) { seen.add(i); out.push(i); }
+    };
+    shuffleHistory.filter(i => i !== queueIndex).forEach(add);
+    add(queueIndex);
+    shuffleOrder.forEach(add);
+    all.forEach(add);
+    return out;
   }
 
   function getCurrent() {
@@ -571,7 +590,7 @@ window.MLPlayer = (function () {
 
   return {
     playTrack, playQueue, enqueue, playNext, pause, resume, isPaused, seekTo,
-    getCurrent, getQueue, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
+    getCurrent, getQueue, getDisplayOrder, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
     jumpTo, removeFromQueue, reorderQueue, clearQueue,
     onChange, onEnded, onTimeUpdate, attemptAutoplay, setUpNext,
   };
