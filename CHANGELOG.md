@@ -6,6 +6,10 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Artists and playlists now appear in the main search results (tile rows above and below the albums)
+- Room host can remove upcoming tracks from the queue (✕ on each row of the dashboard queue)
+
 ## [2.1.1] - 2026-10-18
 
 ### Fixed
