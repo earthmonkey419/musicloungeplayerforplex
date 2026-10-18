@@ -6,6 +6,17 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-18
+
+### Added
+- Add to Queue and Play Next buttons in the results header, for both the Tracks and Albums sections (search, mood, tag and genre results). Albums resolve to their full tracklists, in the order the albums appear
+- Repeat control (off / all / one) on the now-playing bar and the expanded Now Playing view. The mode is remembered between visits, and repeat loop points stay gapless. Repeat is ignored in Room Mode, where the server decides what plays next
+- Gospel mood bucket, with tag exclusions
+- "Powered by MusicLounge Player for Plex" link in the page footer
+
+### Changed
+- With repeat off, shuffle now plays through the queue once and stops, instead of reshuffling and looping indefinitely. Turn on repeat all to keep looping
+
 ## [2.0.0] - 2026-10-11
 
 ### Added
