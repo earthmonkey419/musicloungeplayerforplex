@@ -55,6 +55,12 @@
     <h2>Results</h2>
     <button id="clear-search-btn" class="pl-link-btn">✕ Clear</button>
   </div>
+  <div id="results-artists-section" hidden>
+    <div class="pl-section-header" style="margin-top:0;">
+      <h3 style="margin:0; font-size:16px;">Artists</h3>
+    </div>
+    <div id="results-artists-grid" class="browse-grid" style="margin-bottom: var(--pl-space-md);"></div>
+  </div>
   <div id="results-albums-section" hidden>
     <div class="pl-section-header" style="margin-top:0;">
       <h3 style="margin:0; font-size:16px;">Albums</h3>
@@ -67,6 +73,12 @@
       </div>
     </div>
     <div id="results-albums-grid" class="browse-grid" style="margin-bottom: var(--pl-space-md);"></div>
+  </div>
+  <div id="results-playlists-section" hidden>
+    <div class="pl-section-header" style="margin-top:0;">
+      <h3 style="margin:0; font-size:16px;">Playlists</h3>
+    </div>
+    <div id="results-playlists-grid" class="browse-grid" style="margin-bottom: var(--pl-space-md);"></div>
   </div>
   <div id="results-tracks-header" class="pl-section-header" style="margin-top:0;" hidden>
     <h3 style="margin:0; font-size:16px;">Tracks</h3>
@@ -420,6 +432,45 @@ function renderAlbumResults(albums) {
   section.hidden = false;
 }
 
+function _tileEsc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+}
+
+function artistResultTile(a) {
+  const el = document.createElement("a");
+  el.className = "browse-tile";
+  el.href = `/browse/artist/${encodeURIComponent(a.rating_key)}`;
+  el.innerHTML = `
+    <img class="browse-tile-art browse-tile-art-round" src="/art/${encodeURIComponent(a.rating_key)}?w=300" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'">
+    <div class="browse-tile-title">${_tileEsc(a.title)}</div>
+  `;
+  return el;
+}
+
+function playlistResultTile(p) {
+  const el = document.createElement("a");
+  el.className = "browse-tile";
+  el.href = p.href;
+  const n = typeof p.track_count === "number" ? p.track_count : null;
+  const sub = n === null ? "Playlist" : `${n} track${n === 1 ? "" : "s"}`;
+  el.innerHTML = `
+    <div class="browse-tile-art browse-tile-art-playlist" aria-hidden="true">🎵</div>
+    <div class="browse-tile-title">${_tileEsc(p.title)}</div>
+    <div class="browse-tile-subtitle">${_tileEsc(sub)}</div>
+  `;
+  return el;
+}
+
+function renderTileSection(sectionId, gridId, items, tileFn) {
+  const section = document.getElementById(sectionId);
+  const grid = document.getElementById(gridId);
+  grid.innerHTML = "";
+  if (!items || items.length === 0) { section.hidden = true; return; }
+  items.forEach(it => grid.appendChild(tileFn(it)));
+  section.hidden = false;
+}
+
 function appendResultsPage(tracks, isFirstPage) {
   if (isFirstPage) {
     resultsList.innerHTML = "";
@@ -550,7 +601,11 @@ async function loadResultsPage(isFirstPage) {
 
   if (!isFirstPage) removeLoadingMore();
   appendResultsPage(data.results, isFirstPage);
-  if (isFirstPage) renderAlbumResults(data.albums);
+  if (isFirstPage) {
+    renderAlbumResults(data.albums);
+    renderTileSection("results-artists-section", "results-artists-grid", data.artists, artistResultTile);
+    renderTileSection("results-playlists-section", "results-playlists-grid", data.playlists, playlistResultTile);
+  }
   if (typeof data.seed === "number") currentShuffleSeed = data.seed;
   hasMoreResults = !!data.has_more;
   currentOffset = typeof data.next_offset === "number" ? data.next_offset : currentOffset + data.results.length;
@@ -566,6 +621,8 @@ function clearResults() {
   defaultView.hidden = false;
   document.getElementById("search-input").value = "";
   document.getElementById("results-albums-section").hidden = true;
+  document.getElementById("results-artists-section").hidden = true;
+  document.getElementById("results-playlists-section").hidden = true;
   currentQueryType = null;
   currentQueryValue = null;
   currentShuffleSeed = null;

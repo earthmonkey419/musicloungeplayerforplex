@@ -949,6 +949,21 @@
   font: 700 9px/1 'Space Mono', monospace; color: var(--pl-mint);
 }
 
+/* Search results: playlist tiles have no cover art, so show a placeholder square */
+.browse-tile-art-playlist {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 8px;
+  font-size: 40px; background: var(--pl-mint); color: #123331;
+}
+
+/* Host-only remove button on Room queue rows */
+.queue-remove {
+  margin-left: auto; flex-shrink: 0; background: none; border: 0; cursor: pointer;
+  color: var(--pl-text-secondary); font-size: 16px; line-height: 1; padding: 8px;
+}
+.queue-remove:hover:not(:disabled) { color: var(--pl-red); }
+.queue-remove:disabled { opacity: .4; cursor: default; }
+
 @media (max-width: 600px) {
   .now-playing-bar {
     padding: 10px 14px;
