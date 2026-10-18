@@ -386,3 +386,24 @@ def room_send_queue():
     room_name = tracks[0].get("title", "My Lounge")
     _send_tracks_to_room(tracks, room_name)
     return jsonify({"ok": True, "redirect": url_for("admin.dashboard")})
+
+
+
+@bp.route("/room/queue/remove", methods=["POST"])
+@admin_required
+def room_queue_remove():
+    """Host-only: remove one upcoming track from the live room's queue.
+    The currently playing track is not in room_queue (it was popped when it
+    started), so this can only ever remove upcoming tracks -- skipping the
+    current one stays a separate action."""
+    from flask import jsonify, request
+    room = db.get_active_room()
+    if not room:
+        return jsonify({"error": "No active room."}), 404
+    body = request.get_json(silent=True) or {}
+    try:
+        queue_id = int(body.get("id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid queue item."}), 400
+    removed = db.remove_from_queue(room["session_id"], queue_id)
+    return jsonify({"ok": True, "removed": bool(removed)})
