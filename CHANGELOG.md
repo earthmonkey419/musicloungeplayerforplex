@@ -6,6 +6,11 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-18
+
+### Fixed
+- Shuffle on share-link pages stopped after one pass (a 2.1.0 regression); it now keeps looping there as before
+
 ## [2.1.0] - 2026-10-18
 
 ### Added
