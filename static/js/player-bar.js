@@ -566,7 +566,10 @@ window.MLPlayer = (function () {
     // local array -- attemptAutoplay() always sets a one-track queue,
     // so this is naturally a no-op there (nothing to advance to).
     const repEnd = repeatEffective() ? repeatMode : "off";
-    const atEnd = shuffleOn ? shuffleOrder.length === 0 : queueIndex >= queue.length - 1;
+    // Shuffle's stop-after-one-pass only applies where repeat exists; on pages
+    // with the bar hidden (/linked, Room Mode) shuffle keeps looping as before.
+    const repeatAvailable = !nowPlayingBar.classList.contains("now-playing-bar-page-hidden");
+    const atEnd = shuffleOn ? (repeatAvailable && shuffleOrder.length === 0) : queueIndex >= queue.length - 1;
     if (repEnd !== "off" || !atEnd) {
       goNext(true);
     } else {
