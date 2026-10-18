@@ -56,6 +56,16 @@ window.MLPlayer = (function () {
   let shuffleOn = false;
   let shuffleOrder = [];   // remaining shuffled indices, popped as played
   let shuffleHistory = []; // indices played while shuffled, for "prev"
+  // Repeat: "off" | "all" | "one". Personal-queue feature only -- ignored
+  // wherever the bar UI is page-hidden (Room Mode's queue is server-driven).
+  let repeatMode = "off";
+  try {
+    const savedRepeat = localStorage.getItem("mlplayer.repeat");
+    if (savedRepeat === "all" || savedRepeat === "one") repeatMode = savedRepeat;
+  } catch (e) { /* storage unavailable -- default off */ }
+  function repeatEffective() {
+    return repeatMode !== "off" && !nowPlayingBar.classList.contains("now-playing-bar-page-hidden");
+  }
   let changeListeners = [];
   let endedListeners = [];
   let timeUpdateListeners = [];
@@ -74,8 +84,20 @@ window.MLPlayer = (function () {
     // What goNext() WOULD pick, without mutating shuffle state.
     // -1 = unknown (end of queue, or shuffle about to rebuild).
     if (queueIndex === -1) return -1;
-    if (shuffleOn) return shuffleOrder.length ? shuffleOrder[0] : -1;
-    return queueIndex + 1 < queue.length ? queueIndex + 1 : -1;
+    const rep = repeatEffective() ? repeatMode : "off";
+    if (rep === "one") return queueIndex;
+    if (shuffleOn) {
+      if (shuffleOrder.length) return shuffleOrder[0];
+      // End of a shuffle pass: with repeat-all, build the next pass now so
+      // the preload has a real target and the loop point stays gapless.
+      if (rep === "all" && queue.length > 1) {
+        rebuildShuffleOrder();
+        return shuffleOrder.length ? shuffleOrder[0] : -1;
+      }
+      return -1;
+    }
+    if (queueIndex + 1 < queue.length) return queueIndex + 1;
+    return rep === "all" && queue.length > 0 ? 0 : -1;
   }
 
   function peekNextRef() {
@@ -132,7 +154,7 @@ window.MLPlayer = (function () {
       npNext.disabled = queue.length <= 1;
     } else {
       npPrev.disabled = queueIndex === -1;   // on the first track, "prev" restarts it
-      npNext.disabled = queueIndex >= queue.length - 1;
+      npNext.disabled = queueIndex >= queue.length - 1 && !(repeatEffective() && repeatMode === "all");
     }
   }
 
@@ -352,7 +374,14 @@ window.MLPlayer = (function () {
     notifyChange();
   }
 
-  function goNext() {
+  // `auto === true` means a natural end-of-track advance (from the ended
+  // handler). The Next button always passes nothing, so under repeat-one it
+  // still moves on to the next track instead of replaying.
+  function goNext(auto) {
+    if (auto === true && repeatEffective() && repeatMode === "one" && queueIndex !== -1) {
+      playAt(queueIndex, true);   // replay current; true = don't touch shuffle history
+      return;
+    }
     if (shuffleOn) {
       if (queueIndex !== -1) shuffleHistory.push(queueIndex);
       if (shuffleOrder.length === 0) {
@@ -362,8 +391,34 @@ window.MLPlayer = (function () {
       const next = shuffleOrder.shift();
       playAt(next, true);
     } else {
-      playAt(queueIndex + 1);
+      let n = queueIndex + 1;
+      if (n >= queue.length) {
+        if (repeatEffective() && repeatMode === "all" && queue.length > 0) n = 0;
+        else return;
+      }
+      playAt(n);
     }
+  }
+
+  function renderRepeat() {
+    [document.getElementById("np-repeat"), document.getElementById("npx-repeat")].forEach(btn => {
+      if (!btn) return;
+      btn.classList.toggle("np-shuffle-on", repeatMode !== "off");   // same mint "on" colour as shuffle
+      btn.classList.toggle("np-repeat-one", repeatMode === "one");
+      btn.title = repeatMode === "all" ? "Repeat: all" : repeatMode === "one" ? "Repeat: one" : "Repeat: off";
+      btn.setAttribute("aria-pressed", repeatMode === "off" ? "false" : "true");
+    });
+  }
+
+  function setRepeat(mode) {
+    repeatMode = (mode === "all" || mode === "one") ? mode : "off";
+    try { localStorage.setItem("mlplayer.repeat", repeatMode); } catch (e) { /* non-fatal */ }
+    renderRepeat();
+    updateNavButtons();   // re-aims the gapless preload for the new mode
+  }
+
+  function cycleRepeat() {
+    setRepeat(repeatMode === "off" ? "all" : repeatMode === "all" ? "one" : "off");
   }
 
   function goPrev() {
@@ -458,8 +513,13 @@ window.MLPlayer = (function () {
   });
 
   npPrev.addEventListener("click", goPrev);
-  npNext.addEventListener("click", goNext);
+  npNext.addEventListener("click", () => goNext());
   if (npShuffle) npShuffle.addEventListener("click", () => setShuffle(!shuffleOn));
+  ["np-repeat", "npx-repeat"].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener("click", cycleRepeat);
+  });
+  renderRepeat();
 
   if ("mediaSession" in navigator) {
     // Lets CarPlay/lock-screen/Bluetooth car displays' own transport
@@ -505,8 +565,10 @@ window.MLPlayer = (function () {
     // /linked). Room Mode's "queue" is server-authoritative, not a
     // local array -- attemptAutoplay() always sets a one-track queue,
     // so this is naturally a no-op there (nothing to advance to).
-    if (shuffleOn || queueIndex < queue.length - 1) {
-      goNext();
+    const repEnd = repeatEffective() ? repeatMode : "off";
+    const atEnd = shuffleOn ? shuffleOrder.length === 0 : queueIndex >= queue.length - 1;
+    if (repEnd !== "off" || !atEnd) {
+      goNext(true);
     } else {
       npPlayPause.classList.remove("is-playing");
       updateMediaSessionPlaybackState();
@@ -591,6 +653,7 @@ window.MLPlayer = (function () {
   return {
     playTrack, playQueue, enqueue, playNext, pause, resume, isPaused, seekTo,
     getCurrent, getQueue, getDisplayOrder, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
+    getRepeat: () => repeatMode, setRepeat, cycleRepeat,
     jumpTo, removeFromQueue, reorderQueue, clearQueue,
     onChange, onEnded, onTimeUpdate, attemptAutoplay, setUpNext,
   };

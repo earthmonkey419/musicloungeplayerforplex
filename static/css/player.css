@@ -942,6 +942,13 @@
   color: var(--pl-text);
 }
 
+/* Repeat button: mint when on (shares .np-shuffle-on), small "1" badge for repeat-one */
+#np-repeat, #npx-repeat { position: relative; }
+.np-repeat-one::after {
+  content: "1"; position: absolute; top: 0; right: 0;
+  font: 700 9px/1 'Space Mono', monospace; color: var(--pl-mint);
+}
+
 @media (max-width: 600px) {
   .now-playing-bar {
     padding: 10px 14px;

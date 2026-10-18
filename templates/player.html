@@ -60,6 +60,8 @@
       <h3 style="margin:0; font-size:16px;">Albums</h3>
       <div class="pl-header-actions">
         <button id="albums-play-all-btn" class="pl-link-btn">▶ Play All Albums</button>
+        <button id="albums-play-next-btn" class="pl-link-btn">⏭ Play Next</button>
+        <button id="albums-queue-btn" class="pl-link-btn">⏬ Add to Queue</button>
         <button id="albums-add-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
         <button id="albums-start-room-btn" class="pl-link-btn">📡 Start a Room</button>
       </div>
@@ -70,6 +72,8 @@
     <h3 style="margin:0; font-size:16px;">Tracks</h3>
     <div class="pl-header-actions">
       <button id="play-all-btn" class="pl-link-btn">▶ Play All</button>
+      <button id="play-next-all-btn" class="pl-link-btn">⏭ Play Next</button>
+      <button id="queue-all-btn" class="pl-link-btn">⏬ Add to Queue</button>
       <button id="add-all-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
       <button id="start-room-tracks-btn" class="pl-link-btn">📡 Start a Room</button>
     </div>
@@ -235,6 +239,30 @@ albumsPlayAllBtn.addEventListener("click", async () => {
     albumsPlayAllBtn.textContent = "▶ Play All Albums";
   }
 });
+
+// Bulk queue actions for the Albums header -- same resolver Play All Albums
+// and Add to Playlist use, so all three act on the identical track set.
+function bindAlbumsQueueBtn(id, label, action) {
+  const btn = document.getElementById(id);
+  btn.addEventListener("click", async () => {
+    if (!allLoadedAlbums.length) return;
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+    let done = "";
+    try {
+      const combined = await resolveAllAlbumTracks();
+      if (combined.length === 0) return;
+      action(combined);
+      done = "✓ " + combined.length + " tracks";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = done || label;
+      if (done) setTimeout(() => { btn.textContent = label; }, 1800);
+    }
+  });
+}
+bindAlbumsQueueBtn("albums-queue-btn", "⏬ Add to Queue", tracks => tracks.forEach(t => MLPlayer.enqueue(t)));
+bindAlbumsQueueBtn("albums-play-next-btn", "⏭ Play Next", tracks => MLPlayer.playNext(tracks));
 
 const albumsAddPlaylistBtn = document.getElementById("albums-add-playlist-btn");
 albumsAddPlaylistBtn.addEventListener("click", async () => {
@@ -664,6 +692,27 @@ function runSearch() {
 }
 
 document.getElementById("search-btn").addEventListener("click", runSearch);
+
+// Bulk queue actions for the Tracks header -- act on every track loaded so
+// far (same set Play All uses), in the order shown.
+function flashLabel(btn, text) {
+  const original = btn.dataset.label || btn.textContent;
+  btn.dataset.label = original;
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = original; }, 1800);
+}
+document.getElementById("queue-all-btn").addEventListener("click", (e) => {
+  if (!allLoadedTracks.length) return;
+  const n = allLoadedTracks.length;
+  allLoadedTracks.slice().forEach(t => MLPlayer.enqueue(t));
+  flashLabel(e.currentTarget, "✓ Added " + n);
+});
+document.getElementById("play-next-all-btn").addEventListener("click", (e) => {
+  if (!allLoadedTracks.length) return;
+  const n = allLoadedTracks.length;
+  MLPlayer.playNext(allLoadedTracks.slice());
+  flashLabel(e.currentTarget, "✓ Next: " + n);
+});
 document.getElementById("clear-search-btn").addEventListener("click", clearResults);
 
 let searchTimeout;
