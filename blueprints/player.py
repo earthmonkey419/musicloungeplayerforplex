@@ -114,12 +114,54 @@ def api_save_queue():
         return jsonify({"ok": False}), 200
 
 
+def _safe_search(fn):
+    """Artists/playlists are extras above the track results -- a failure
+    here must never break the main search, so degrade to an empty list."""
+    try:
+        return fn() or []
+    except Exception:
+        current_app.logger.exception("Player search extra section failed")
+        return []
+
+
+def _search_playlists(q, limit=6):
+    """Native + Plex audio playlists whose title contains q, best first."""
+    qn = " ".join(q.lower().split())
+    if not qn:
+        return []
+    found = []
+    for p in db.list_playlists():
+        name = p["name"] or ""
+        n = name.lower()
+        if qn in n:
+            found.append((0 if n.startswith(qn) else 1, n, {
+                "kind": "native", "id": p["id"], "title": name, "href": f"/playlists/{p['id']}",
+            }))
+    try:
+        for p in plex_client.list_all_playlists_cached():
+            name = p["title"] or ""
+            n = name.lower()
+            if qn in n:
+                found.append((0 if n.startswith(qn) else 1, n, {
+                    "kind": "plex", "title": name, "track_count": p.get("track_count"),
+                    "href": f"/playlists/plex/{p['rating_key']}",
+                }))
+    except Exception:
+        current_app.logger.exception("Plex playlist search failed; native playlists only")
+    found.sort(key=lambda t: (t[0], t[1]))
+    out = [t[2] for t in found[:limit]]
+    for item in out:
+        if item["kind"] == "native":
+            item["track_count"] = len(db.get_playlist_tracks(item.pop("id")))
+    return out
+
+
 @bp.route("/api/player/search")
 @admin_required
 def api_search():
     q = request.args.get("q", "").strip()
     if not q:
-        return jsonify({"results": [], "albums": [], "has_more": False, "next_offset": 0})
+        return jsonify({"results": [], "albums": [], "artists": [], "playlists": [], "has_more": False, "next_offset": 0})
     offset = max(0, request.args.get("offset", 0, type=int) or 0)
     limit = min(50, max(1, request.args.get("limit", 20, type=int) or 20))
     try:
@@ -130,6 +172,9 @@ def api_search():
         # same query. None (MusicMind unavailable) degrades to an
         # empty list -- the track results still work either way.
         page["albums"] = (musicmind_bridge.search_albums_for_player(q) or []) if offset == 0 else []
+        # Artists and playlists: same "top matches, first page only" treatment as albums.
+        page["artists"] = _safe_search(lambda: plex_client.search_artists_for_player(q)) if offset == 0 else []
+        page["playlists"] = _safe_search(lambda: _search_playlists(q)) if offset == 0 else []
         return jsonify(page)
     except Exception:
         current_app.logger.exception("Player search failed for query: %r", q)
