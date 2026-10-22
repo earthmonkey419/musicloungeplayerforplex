@@ -6,6 +6,11 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-22
+
+### Changed
+- Opening the queue now scrolls to the track that's playing, so it's easy to see what's coming up next
+
 ## [2.1.1] - 2026-10-18
 
 ### Fixed
