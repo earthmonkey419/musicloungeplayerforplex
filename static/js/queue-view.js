@@ -89,6 +89,21 @@
     });
   }
 
+  // On open, center the playing track in the list so people can see what's
+  // coming up next. Only called from the open handler (not from re-renders),
+  // so it never fights the user while they scroll or reorder. Scrolls the
+  // list element directly rather than scrollIntoView() so no ancestor/page
+  // scrolling is triggered. Must run after modal.hidden = false, since a
+  // hidden element has no layout to measure.
+  function scrollToCurrent() {
+    const row = list.querySelector(".queue-modal-current");
+    if (!row) return;
+    const rowRect = row.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const offset = rowRect.top - listRect.top + list.scrollTop;
+    list.scrollTop = Math.max(0, offset - (list.clientHeight - row.offsetHeight) / 2);
+  }
+
   btn.addEventListener("click", () => {
     renderQueueModal();
     // openAddToPlaylistBulk() is defined locally per-template (currently
@@ -98,6 +113,7 @@
     // rather than showing it everywhere and failing silently on click.
     if (addPlaylistBtn) addPlaylistBtn.hidden = typeof window.openAddToPlaylistBulk !== "function";
     modal.hidden = false;
+    scrollToCurrent();
   });
   closeBtn.addEventListener("click", () => { modal.hidden = true; });
   modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
