@@ -444,3 +444,63 @@ def list_all_playlists():
         }
         for p in playlists
     ]
+
+
+# --- Player search: artists & playlists --------------------------------------
+import time as _time
+
+_ARTIST_CACHE = {"at": 0.0, "rows": None}
+_ARTIST_CACHE_TTL = 600     # artist list rarely changes; one full fetch per 10 min
+_PLAYLIST_CACHE = {"at": 0.0, "rows": None}
+_PLAYLIST_CACHE_TTL = 60
+
+
+def _norm_name(s):
+    """Lowercase, drop periods, collapse spaces -- so "Mary J. Blige" and
+    "Mary J Blige" match each other (same idea as the track search)."""
+    return " ".join((s or "").lower().replace(".", "").split())
+
+
+def _cached_artists():
+    now = _time.time()
+    if _ARTIST_CACHE["rows"] is None or now - _ARTIST_CACHE["at"] > _ARTIST_CACHE_TTL:
+        rows = [
+            {"rating_key": a["rating_key"], "title": a["title"], "norm": _norm_name(a["title"])}
+            for a in list_all_artists()
+        ]
+        _ARTIST_CACHE["rows"] = rows
+        _ARTIST_CACHE["at"] = now
+    return _ARTIST_CACHE["rows"]
+
+
+def search_artists_for_player(query, limit=6):
+    """Artists whose name matches the query, best matches first (exact,
+    then prefix, then word-start, then anywhere). Matches against Plex's
+    own artist list, so every result has a real artist page."""
+    q = _norm_name(query)
+    if not q:
+        return []
+    scored = []
+    for a in _cached_artists():
+        n = a["norm"]
+        if n == q:
+            score = 0
+        elif n.startswith(q):
+            score = 1
+        elif (" " + q) in (" " + n):
+            score = 2
+        elif q in n:
+            score = 3
+        else:
+            continue
+        scored.append((score, n, a))
+    scored.sort(key=lambda t: (t[0], t[1]))
+    return [{"rating_key": a["rating_key"], "title": a["title"]} for _, _, a in scored[:limit]]
+
+
+def list_all_playlists_cached():
+    now = _time.time()
+    if _PLAYLIST_CACHE["rows"] is None or now - _PLAYLIST_CACHE["at"] > _PLAYLIST_CACHE_TTL:
+        _PLAYLIST_CACHE["rows"] = list_all_playlists()
+        _PLAYLIST_CACHE["at"] = now
+    return _PLAYLIST_CACHE["rows"]

@@ -15,9 +15,15 @@
 </div>
 
 <div class="pl-card pl-card-surface" style="text-align:center; max-width:560px; margin:0 auto;">
-  <img id="hero-art" src="/art/{{ share['content_ref'] }}" onerror="this.style.opacity=0" style="width:220px; height:220px; border-radius:var(--pl-radius-md); object-fit:cover; margin-bottom:var(--pl-space-md);">
+  <img id="hero-art" src="/art/{{ share['content_ref'] }}" onerror="this.style.opacity=0" onclick="openArt()" title="Tap to enlarge" style="cursor:zoom-in; width:220px; height:220px; border-radius:var(--pl-radius-md); object-fit:cover; margin-bottom:var(--pl-space-md);">
   <h2 style="font-size:24px; margin:0;">{{ content_title }}</h2>
   {% if content_artist %}<p style="color:var(--pl-text-secondary); margin:4px 0 var(--pl-space-md);">{{ content_artist }}</p>{% endif %}
+
+  <div id="sharee-np" style="display:none; margin:0 0 var(--pl-space-md);">
+    <div id="sharee-np-label" class="pl-caption" style="text-transform:uppercase; letter-spacing:.08em; font-size:11px;">Now playing</div>
+    <div id="sharee-np-title" style="font-weight:700; font-size:17px;"></div>
+    <div id="sharee-np-sub" class="pl-caption"></div>
+  </div>
 
   <div class="room-transport" style="justify-content:center; margin-bottom:var(--pl-space-md);">
     <button id="shuffle-btn" class="room-transport-btn" onclick="toggleShuffle()" title="Shuffle">🔀</button>
@@ -31,6 +37,7 @@
     <li class="track-row" style="cursor:pointer;" onclick="playTrackAt({{ loop.index0 }})" id="track-row-{{ loop.index0 }}">
       <div class="track-meta">
         <div class="track-title">{{ loop.index }}. {{ t["title"] }}</div>
+        <div class="pl-caption">{{ t["artist"] }}</div>
       </div>
       <div class="pl-caption">{{ "%d:%02d"|format(t["duration_sec"] // 60, t["duration_sec"] % 60) }}</div>
     </li>
@@ -40,11 +47,26 @@
   </ul>
 </div>
 
+<div id="art-lightbox" onclick="closeArt()" style="display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.85); align-items:center; justify-content:center; padding:16px; cursor:zoom-out;">
+  <img id="art-lightbox-img" alt="Album art" style="max-width:min(92vw,900px); max-height:88vh; object-fit:contain; border-radius:12px;">
+</div>
+
 <button id="back-to-top" class="pl-back-to-top" style="position:fixed; bottom:24px; right:24px; z-index:10; display:none;" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Back to top">↑ Top</button>
 
 <script>
 const TRACKS = {{ tracks|tojson }};
 const EXPIRES_AT = {{ share["expires_at"]|tojson }};
+let currentArtKey = {{ share["content_ref"]|tojson }};
+
+function openArt() {
+  const img = document.getElementById("art-lightbox-img");
+  img.src = "/art/" + currentArtKey + "?w=1000";
+  document.getElementById("art-lightbox").style.display = "flex";
+}
+function closeArt() {
+  document.getElementById("art-lightbox").style.display = "none";
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeArt(); });
 
 function highlightRow(i) {
   document.querySelectorAll(".track-row").forEach(el => el.style.fontWeight = "normal");
@@ -82,6 +104,11 @@ MLPlayer.onChange(({ track, index, isPaused }) => {
   if (track) {
     document.getElementById("hero-art").style.opacity = 1;
     document.getElementById("hero-art").src = "/art/" + track.rating_key;
+    currentArtKey = track.rating_key;
+    document.getElementById("sharee-np").style.display = "block";
+    document.getElementById("sharee-np-label").textContent = isPaused ? "Paused" : "Now playing";
+    document.getElementById("sharee-np-title").textContent = track.title || "";
+    document.getElementById("sharee-np-sub").textContent = [track.artist, track.album].filter(Boolean).join(" · ");
     if (typeof index === "number") highlightRow(index);
   }
 });

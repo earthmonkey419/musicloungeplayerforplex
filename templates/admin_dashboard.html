@@ -57,6 +57,7 @@
             <div class="track-title">{{ item["title"] }}</div>
             <div class="track-artist">{{ item["artist"] }}</div>
           </div>
+          <button class="queue-remove" data-id="{{ item['id'] }}" title="Remove from queue" aria-label="Remove from queue">✕</button>
         </li>
         {% else %}
         <li class="empty">Queue's empty — send guests to the join link below.</li>
@@ -193,6 +194,7 @@ function refreshState() {
               <div class="track-title">${item.title}</div>
               <div class="track-artist">${item.artist}</div>
             </div>
+            <button class="queue-remove" data-id="${item.id}" title="Remove from queue" aria-label="Remove from queue">✕</button>
           </li>`).join("");
       }
       syncAudio(state);
@@ -209,6 +211,32 @@ if (currentTrackRef && {{ (room["is_playing"] == 1)|tojson }}) {
     showTapBanner
   );
 }
+
+// Host removes an upcoming track. Delegated, so it covers both the
+// server-rendered rows and the ones the 4s poll re-renders.
+document.getElementById("queue-list").addEventListener("click", (e) => {
+  const btn = e.target.closest(".queue-remove");
+  if (!btn || btn.disabled) return;
+  const id = parseInt(btn.dataset.id, 10);
+  if (!id) return;
+  btn.disabled = true;
+  const li = btn.closest("li");
+  if (li) li.style.opacity = "0.4";
+  // If the head of the queue is going away, stop the engine aiming at it
+  // BEFORE the request returns, so it can't preload-and-hand-off to a
+  // track that's about to be deleted. refreshState() re-aims afterwards.
+  if (li && li === li.parentElement.firstElementChild) {
+    upNextTrack = null;
+    MLPlayer.setUpNext(null);
+  }
+  fetch("/admin/room/queue/remove", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({id}),
+  })
+    .catch(console.error)
+    .finally(() => { minSeq = pollSeq + 1; refreshState(); });   // drop any poll that predates the removal
+});
 
 setInterval(refreshState, 4000);
 </script>
