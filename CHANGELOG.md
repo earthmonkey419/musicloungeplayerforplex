@@ -7,8 +7,12 @@ this project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Share links: recipients now see the artist on every track, a Now Playing readout, and can tap the album art to enlarge it
 - Artists and playlists now appear in the main search results (tile rows above and below the albums)
 - Room host can remove upcoming tracks from the queue (✕ on each row of the dashboard queue)
+
+### Fixed
+- Share creation: picking a search result no longer fails for titles containing an apostrophe (e.g. "Sgt. Pepper's")
 
 ## [2.1.1] - 2026-10-18
 
