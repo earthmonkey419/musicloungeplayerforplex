@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-24
+
 ### Added
 - Queue modal now scrolls to center the currently playing track when opened
 - Share links: recipients now see the artist on every track, a Now Playing readout, and can tap the album art to enlarge it
