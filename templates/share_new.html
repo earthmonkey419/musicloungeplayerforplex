@@ -97,6 +97,11 @@ function debouncedContentSearch() {
   searchTimer = setTimeout(runContentSearch, 350);
 }
 
+let currentResults = [];
+function escHtml(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function runContentSearch() {
   const q = document.getElementById('content-search').value.trim();
   const el = document.getElementById('content-results');
@@ -114,11 +119,15 @@ function runContentSearch() {
         el.innerHTML = `<p class="pl-caption">No matches.</p>`;
         return;
       }
-      el.innerHTML = items.map(item => `
-        <button class="stage-result-btn" onclick='pickContent(${JSON.stringify(item)}, this)'>
-          <div>${item.title}</div>
-          <div class="pl-caption">${item.subtitle || ''}</div>
+      currentResults = items;
+      el.innerHTML = items.map((item, i) => `
+        <button class="stage-result-btn" data-idx="${i}">
+          <div>${escHtml(item.title)}</div>
+          <div class="pl-caption">${escHtml(item.subtitle || '')}</div>
         </button>`).join('');
+      el.querySelectorAll('.stage-result-btn').forEach(b => {
+        b.addEventListener('click', () => pickContent(currentResults[+b.dataset.idx], b));
+      });
     })
     .catch(console.error);
 }
