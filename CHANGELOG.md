@@ -7,6 +7,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Queue modal now scrolls to center the currently playing track when opened
 - Share links: recipients now see the artist on every track, a Now Playing readout, and can tap the album art to enlarge it
 - Artists and playlists now appear in the main search results (tile rows above and below the albums)
 - Room host can remove upcoming tracks from the queue (✕ on each row of the dashboard queue)
