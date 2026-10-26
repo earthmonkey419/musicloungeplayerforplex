@@ -9,6 +9,7 @@ import config
 import db
 import musicmind_bridge
 import plex_client
+import media_access
 from auth import guest_required
 
 bp = Blueprint("room", __name__)
@@ -384,12 +385,14 @@ def _art_cache_put(key, ctype, data):
 
 def _art_response(ctype, data):
     resp = Response(data, content_type=ctype or "image/jpeg")
-    resp.headers["Cache-Control"] = "public, max-age=86400"
+    resp.headers["Cache-Control"] = "private, max-age=86400"
     return resp
 
 
 @bp.route("/art/<rating_key>")
 def art(rating_key):
+    if not media_access.can_view_art(rating_key):
+        return "", 401
     width = request.args.get("w", type=int)
     if width not in _ART_WIDTHS:
         width = None
@@ -446,6 +449,8 @@ def art(rating_key):
 
 @bp.route("/stream/<rating_key>")
 def stream(rating_key):
+    if not media_access.can_stream(rating_key):
+        return "Not authorized", 401
     try:
         part_path = plex_client.track_stream_part(rating_key)
     except Exception:
@@ -470,4 +475,9 @@ def stream(rating_key):
     for h in ("Content-Range", "Content-Length", "Accept-Ranges"):
         if h in upstream.headers:
             resp.headers[h] = upstream.headers[h]
+    # Play inline (never prompt a save), don't let the browser sniff the
+    # type, and keep shared caches from holding an authorized stream.
+    resp.headers["Content-Disposition"] = "inline"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    resp.headers["Cache-Control"] = "private"
     return resp
