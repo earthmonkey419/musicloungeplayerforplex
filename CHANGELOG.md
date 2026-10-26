@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-26
+
 ### Changed
 - After logging in you now land on the page you were trying to reach (e.g. Share Some Music) instead of always the dashboard, and the login screen says why it's asking
 
