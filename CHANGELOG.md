@@ -6,6 +6,12 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `SHARE_REQUIRES_LOGIN` setting (default `true`): creating share links requires the admin login. Set it to `false` to keep the previous open behavior
+
+### Security
+- Share creation, search, and "Email It" were reachable by URL without logging in. They are now gated by default. Recipients' `/linked/<token>` pages are unaffected
+
 ## [2.3.0] - 2026-10-24
 
 ### Added

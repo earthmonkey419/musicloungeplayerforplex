@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app
 
 import config
+from auth import share_access_required, share_api_access_required
 import db
 import plex_client
 import musicmind_bridge
@@ -12,6 +13,7 @@ bp = Blueprint("share", __name__)
 
 
 @bp.route("/", methods=["GET"])
+@share_access_required
 def new_share():
     # Three-stage flow: what are you sharing / choose it / how long.
     return render_template(
@@ -23,6 +25,7 @@ def new_share():
 
 
 @bp.route("/api/search")
+@share_api_access_required
 def api_share_search():
     content_type = request.args.get("type", "").strip().lower()
     q = request.args.get("q", "").strip()
@@ -74,6 +77,7 @@ def api_share_search():
 
 
 @bp.route("/create", methods=["POST"])
+@share_api_access_required
 def create_share():
     body = request.get_json(silent=True) or {}
     content_type = body.get("content_type")
@@ -112,6 +116,7 @@ def create_share():
 
 
 @bp.route("/<token>/email", methods=["POST"])
+@share_api_access_required
 def email_share(token):
     if not db.is_share_live(token):
         return jsonify({"error": "This link has expired or is invalid."}), 410
