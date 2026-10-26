@@ -118,7 +118,6 @@ Optional integrations (fully functional with nothing else configured; these just
 - **Last.fm scrobbling** — `LASTFM_API_KEY` / `LASTFM_API_SECRET` ([get a key](https://www.last.fm/api/account/create)), then connect your account once from Settings
 - **MusicMind bridge** — `MUSICMIND_DB_PATH`, an optional read-only companion database. Fully optional (everything falls back to live Plex queries with no missing functionality), but when connected it meaningfully accelerates search, mood/genre browsing, and Track browsing — MusicMind's own real genre data also powers the Genres pill row on the search page.
 - **SMTP** — for emailing Share Mode links directly instead of just copying them
-- **`SHARE_REQUIRES_LOGIN`** — defaults to `true`: creating share links requires the admin login. Set to `false` to let anyone who can reach the app create them
 
 **Getting a Plex token (recommended):** give MusicLounge Player its own. On any
 machine with Python (`pip install plexapi requests`, or inside the app's
