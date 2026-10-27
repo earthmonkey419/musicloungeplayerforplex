@@ -22,8 +22,8 @@ services:
       # - ./config.py:/app/config.py:ro
       #
       # Only needed if MUSICMIND_DB_PATH is set in .env -- mount
-      # MusicMind's plex_music_brain.db read-only at that same path.
-      # - /path/on/host/plex_music_brain.db:/app/data/plex_music_brain.db:ro
+      # MusicMind's musicmind.db read-only at that same path.
+      # - /path/on/host/musicmind.db:/app/data/musicmind.db:ro
 
 volumes:
   mlplayer-data:

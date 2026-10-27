@@ -72,7 +72,7 @@ SMTP_FROM_DISPLAY_NAME = os.environ.get("SMTP_FROM_DISPLAY_NAME", "MusicLounge P
 # --- Optional: MusicMind read-only bridge ---
 # Leave blank to disable entirely -- Player falls back to plain
 # genre-tag mood buckets with no degraded functionality. Point this
-# at MusicMind's plex_music_brain.db (read-only; Player never writes
+# at MusicMind's musicmind.db (read-only; Player never writes
 # to it) to enable instrumental-only filtering enrichment.
 MUSICMIND_DB_PATH = os.environ.get("MUSICMIND_DB_PATH", "")
 

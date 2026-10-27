@@ -1,5 +1,5 @@
 """
-Player -- optional read-only bridge into MusicMind's plex_music_brain.db.
+Player -- optional read-only bridge into MusicMind's musicmind.db.
 
 Fully optional: if config.MUSICMIND_DB_PATH isn't set or the file
 isn't reachable, every function here falls back to Player's own
