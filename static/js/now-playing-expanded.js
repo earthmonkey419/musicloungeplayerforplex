@@ -19,6 +19,7 @@
   const art = document.getElementById("npx-art");
   const title = document.getElementById("npx-title");
   const artist = document.getElementById("npx-artist");
+  const album = document.getElementById("npx-album");
   const progress = document.getElementById("npx-progress");
   const elapsedEl = document.getElementById("npx-elapsed");
   const durationEl = document.getElementById("npx-duration");
@@ -41,6 +42,10 @@
     if (!track) return;
     title.textContent = track.title;
     artist.textContent = track.artist;
+    if (album) {
+      album.textContent = track.album || "";
+      album.hidden = !track.album;
+    }
     art.src = `/art/${track.rating_key}`;
   }
 
