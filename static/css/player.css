@@ -416,6 +416,7 @@
 .np-info { flex: 0 0 200px; min-width: 0; }
 .np-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-artist { font-size: 12px; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-album { font-size: 11px; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .np-controls { display: flex; align-items: center; gap: var(--pl-space-sm); flex: 1; justify-content: center; }
 .np-btn-play {
   font-family: 'Inter', sans-serif;
@@ -785,6 +786,9 @@
 
 .npx-title { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
 .npx-artist { font-size: 15px; opacity: 0.75; text-align: center; margin-bottom: var(--pl-space-lg); }
+/* Album sits under the artist; when present it takes over the artist's
+   bottom spacing so the controls don't shift. */
+.npx-album { font-size: 13px; opacity: 0.6; text-align: center; margin-top: calc(-1 * var(--pl-space-lg) + 2px); margin-bottom: var(--pl-space-lg); }
 
 .npx-progress-row {
   display: flex;
@@ -1021,6 +1025,6 @@
     min-width: 0;
     align-items: flex-start;
   }
-  .npx-title, .npx-artist { text-align: left; }
+  .npx-title, .npx-artist, .npx-album { text-align: left; }
   .npx-controls { justify-content: flex-start; }
 }

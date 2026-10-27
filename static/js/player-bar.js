@@ -44,6 +44,7 @@ window.MLPlayer = (function () {
   const nowPlayingBar = document.getElementById("now-playing-bar");
   const npTitle = document.getElementById("np-title");
   const npArtist = document.getElementById("np-artist");
+  const npAlbum = document.getElementById("np-album");
   const npArt = document.getElementById("np-art");
   const npPlayPause = document.getElementById("np-playpause");
   const npVolume = document.getElementById("np-volume");
@@ -162,6 +163,10 @@ window.MLPlayer = (function () {
     nowPlayingBar.hidden = false;
     npTitle.textContent = track.title;
     npArtist.textContent = track.artist;
+    if (npAlbum) {
+      npAlbum.textContent = track.album || "";
+      npAlbum.hidden = !track.album;
+    }
     npArt.src = `/art/${track.rating_key}?w=128`;
     npPlayPause.classList.toggle("is-playing", isPlayingIcon !== false);
     updateMediaSessionMetadata(track);

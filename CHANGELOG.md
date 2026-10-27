@@ -7,6 +7,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- The album name now shows under the artist in the bottom player bar and in the expanded Now Playing view
 - Two new station buttons on the search page: **Library Radio** (random tracks from the whole library) and **Album Radio** (random albums back to back, each in album order). Both are continuous like the other stations and work without MusicMind or Plex sonic analysis
 
 ### Changed
