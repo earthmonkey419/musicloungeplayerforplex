@@ -621,6 +621,42 @@ def _track_dicts(keys):
     return [by_key[k] for k in keys if by_key.get(k)]
 
 
+def random_library_tracks(exclude_keys=(), limit=10, max_per_artist=2):
+    """Random tracks from the WHOLE library (Library Radio). No similarity,
+    no tag filter. Skips `exclude_keys`, and caps tracks per artist within
+    the batch so one prolific artist doesn't dominate. Returns player-shaped
+    track dicts, or [] if MusicMind isn't available or has nothing."""
+    if not is_available():
+        return []
+    exclude = {str(k) for k in list(exclude_keys)[:600]}
+    conn = _connect()
+    try:
+        conn.row_factory = sqlite3.Row
+        artist_expr = _artist_expr(conn)
+        # Exclusion is done in Python (not NOT IN) so it works whether the
+        # rating_key column is stored as text or integer.
+        rows = conn.execute(
+            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
+            "FROM tracks ORDER BY RANDOM() LIMIT ?",
+            (limit * 4 + len(exclude),),
+        ).fetchall()
+    finally:
+        conn.close()
+    out, per_artist = [], {}
+    for r in rows:
+        d = _row_to_track_dict(r)
+        if not d or str(d["rating_key"]) in exclude:
+            continue
+        a = (d["artist"] or "").lower()
+        if per_artist.get(a, 0) >= max_per_artist:
+            continue
+        per_artist[a] = per_artist.get(a, 0) + 1
+        out.append(d)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def random_tag_seeds(n=3, min_count=21):
     """Pick a random reliable tag and n random tracks carrying it.
     Returns (tag, [rating_keys]) or None if MusicMind isn't available."""

@@ -206,3 +206,9 @@ def browse_albums_page(offset=0, limit=48, sort="added"):
 
 def album_letter_offset(letter):
     return _letter_offset("albums", letter)
+
+
+def all_albums():
+    """The cached whole-library album pool (list of dicts with rating_key,
+    title, artist, track_count, ...). Used by Album Radio to pick albums."""
+    return _get_pool("albums") or []

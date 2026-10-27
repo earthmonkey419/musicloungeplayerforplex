@@ -6,6 +6,9 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Two new station buttons on the search page: **Library Radio** (random tracks from the whole library) and **Album Radio** (random albums back to back, each in album order). Both are continuous like the other stations and work without MusicMind or Plex sonic analysis
+
 ### Changed
 - After logging in you now land on the page you were trying to reach (e.g. Share Some Music) instead of always the dashboard, and the login screen says why it's asking
 
