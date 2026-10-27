@@ -282,10 +282,12 @@ def api_tag():
 
 
 # --- Radio -----------------------------------------------------------------
-# Three engines, chosen once at /start and echoed back by the client as `ctx`:
-#   sim   -- MusicMind tag+Synapse similarity (musicmind_bridge.radio_next)
-#   sonic -- Plex's own sonicallySimilar() (Plex Pass + analyzed library)
-#   mood  -- random mood-bucket pool (Random Radio only; always available)
+# Five engines, chosen once at /start and echoed back by the client as `ctx`:
+#   sim     -- MusicMind tag+Synapse similarity (musicmind_bridge.radio_next)
+#   sonic   -- Plex's own sonicallySimilar() (Plex Pass + analyzed library)
+#   mood    -- random mood-bucket pool (Random Radio only; always available)
+#   library -- random tracks from the whole library (Library Radio)
+#   album   -- random whole albums back to back, in album order (Album Radio)
 # Errors are 422 + JSON, never 502 (Cloudflare replaces 502 bodies with HTML).
 
 import random as _radio_random
@@ -361,9 +363,67 @@ def _radio_mood_batch(mood, exclude, limit):
     return fresh[:limit]
 
 
+def _radio_library_batch(exclude, limit):
+    """Library Radio: random tracks from the whole library, no similarity.
+    MusicMind when available (one indexed query); otherwise sample random
+    albums from the cached album pool and take one random track from each."""
+    if musicmind_bridge.is_available():
+        batch = musicmind_bridge.random_library_tracks(exclude, limit)
+        if batch:
+            return batch
+    ex = {str(k) for k in exclude}
+    pool = [a for a in library_browse.all_albums() if a.get("track_count")]
+    if not pool:
+        return []
+    plex = plex_client.get_plex()
+    out, per_artist = [], {}
+    for a in _radio_random.sample(pool, min(len(pool), limit * 3)):
+        tracks = [t for t in plex.fetchItem(int(a["rating_key"])).tracks()
+                  if str(t.ratingKey) not in ex]
+        if not tracks:
+            continue
+        d = plex_client._track_to_dict(_radio_random.choice(tracks))
+        artist = (d["artist"] or "").lower()
+        if per_artist.get(artist, 0) >= 2:
+            continue
+        per_artist[artist] = per_artist.get(artist, 0) + 1
+        out.append(d)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _radio_album_batch(exclude, count=1):
+    """Album Radio: `count` random whole albums, tracks in album order.
+    Skips any album with a track already played this station. Prefers real
+    albums (3+ tracks) so singles don't dominate; falls back to anything.
+    The batch size is therefore the album's length, not RADIO_BATCH."""
+    ex = {str(k) for k in exclude}
+    pool = library_browse.all_albums()
+    candidates = [a for a in pool if (a.get("track_count") or 0) >= 3] or list(pool)
+    if not candidates:
+        return []
+    plex = plex_client.get_plex()
+    out, found = [], 0
+    for a in _radio_random.sample(candidates, min(len(candidates), count * 8)):
+        tracks = plex.fetchItem(int(a["rating_key"])).tracks()
+        if not tracks or any(str(t.ratingKey) in ex for t in tracks):
+            continue
+        out.extend(plex_client._track_to_dict(t) for t in tracks)
+        ex.update(str(t.ratingKey) for t in tracks)
+        found += 1
+        if found >= count:
+            break
+    return out
+
+
 def _radio_batch(ctx, seeds, exclude, limit):
     """Returns a list of track dicts (possibly empty), or None on engine failure."""
     mode = (ctx or {}).get("mode")
+    if mode == "library":
+        return _radio_library_batch(exclude, limit)
+    if mode == "album":
+        return _radio_album_batch(exclude, 1)
     if mode == "sim":
         return musicmind_bridge.radio_next(seeds, exclude_keys=exclude, limit=limit)
     if mode == "sonic":
@@ -381,6 +441,8 @@ def api_radio_capabilities():
     return jsonify({
         "track_radio": bool(track),
         "random_radio": True,  # mood-bucket fallback always exists
+        "library_radio": True,  # random whole-library; no MusicMind or sonic needed
+        "album_radio": True,    # random whole albums; no MusicMind or sonic needed
         "engine": "musicmind" if mm else ("plex-sonic" if track else "mood"),
     })
 
@@ -450,6 +512,31 @@ def _radio_start_random():
     })
 
 
+def _radio_start_library():
+    tracks = _radio_library_batch([], RADIO_BATCH * 2)
+    if not tracks:
+        return _radio_error("Couldn't build a library station right now.")
+    return jsonify({
+        "tracks": tracks,
+        "seeds": [],
+        "label": "Library Radio",
+        "ctx": {"mode": "library"},
+    })
+
+
+def _radio_start_random_album():
+    # Two albums up front so the queue is never short at the first refill check.
+    tracks = _radio_album_batch([], 2)
+    if not tracks:
+        return _radio_error("Couldn't pick an album right now.")
+    return jsonify({
+        "tracks": tracks,
+        "seeds": [],
+        "label": "Album Radio",
+        "ctx": {"mode": "album"},
+    })
+
+
 RECENT_MIX_DAYS = 14
 
 
@@ -478,6 +565,10 @@ def api_radio_start():
     try:
         if kind == "random":
             return _radio_start_random()
+        if kind == "library":
+            return _radio_start_library()
+        if kind == "random_album":
+            return _radio_start_random_album()
         if kind in ("track", "album") and ref:
             return _radio_start_seeded(kind, ref)
         return _radio_error("Unknown radio request.")

@@ -3,8 +3,9 @@
  * Depends only on window.MLPlayer. Must load AFTER player-bar.js.
  *
  * Server contract (blueprints/player.py):
- *   GET  /api/player/radio/capabilities -> {track_radio, random_radio, engine}
- *   POST /api/player/radio/start  {type: "track"|"album"|"random", ref?}
+ *   GET  /api/player/radio/capabilities -> {track_radio, random_radio,
+ *                                           library_radio, album_radio, engine}
+ *   POST /api/player/radio/start  {type: "track"|"album"|"random"|"library"|"random_album", ref?}
  *        -> {tracks, seeds, label, ctx}
  *   POST /api/player/radio/next   {seeds, exclude, limit, ctx}
  *        -> {tracks}   (empty list = neighbourhood exhausted)
@@ -189,13 +190,22 @@
   MLPlayer.onChange(refillIfNeeded);
   if (state) showChip("\uD83D\uDCFB " + state.label, true);
 
-  // "Random Radio" button on the Player search page. Delegated, so it
-  // survives spa-nav swapping the page content.
+  // Station buttons on the Player search page. Delegated, so they survive
+  // spa-nav swapping the page content.
+  //   Random Radio  -- random tag/mood seed, then similar tracks
+  //   Library Radio -- random tracks from the whole library
+  //   Album Radio   -- random whole albums back to back, in album order
+  const STATION_BTNS = {
+    "random-radio-btn": "random",
+    "library-radio-btn": "library",
+    "album-radio-btn": "random_album",
+  };
   document.addEventListener("click", async (e) => {
-    const btn = e.target.closest("#random-radio-btn");
-    if (!btn || btn.disabled) return;
+    const btn = e.target.closest(".pl-btn[id$='-radio-btn']");
+    const type = btn && STATION_BTNS[btn.id];
+    if (!type || btn.disabled) return;
     btn.disabled = true;
-    try { await start({ type: "random" }); } finally { btn.disabled = false; }
+    try { await start({ type }); } finally { btn.disabled = false; }
   });
 
   window.MLRadio = { start, stop, capabilities, isActive: () => !!state };
