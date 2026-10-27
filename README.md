@@ -14,36 +14,44 @@ It also includes two social listening modes, launched right from the player:
 - **Room Mode** — start a shared listening session; guests join by code and add to one shared queue, no accounts needed.
 - **Share Mode** — send a track, album, artist, or playlist as a private, time-limited link.
 
-## Player vs. Jukebox
+**Status:** actively developed. Latest release: v2.3.0 — see [`CHANGELOG.md`](CHANGELOG.md) for what shipped and what's coming.
 
-MusicLounge Player and [MusicLounge Jukebox](https://musiclounge.vp-fun.com) are sibling
-apps under Verbena Projects. Both are free, self-hosted, and share Room Mode and Share
-Mode. Player is the full listening app — personal search, browse, playlists, and a
-persistent queue on top of that. Jukebox is the lite version, for when all you want is
-to start a room or send a link, with no personal library browsing.
+## Player vs. Jukebox (Lite)
 
-|                            | Player | Jukebox |
-| -------------------------- | :----: | :-----: |
-| Personal search & browse   |   ✓    |    —    |
-| Playlists (native + synced)|   ✓    |    —    |
-| Personal queue & transport |   ✓    |    —    |
-| Room Mode                  |   ✓    |    ✓    |
-| Share Mode                 |   ✓    |    ✓    |
+MusicLounge Player is the recommended MusicLounge app, and the one new features
+land in first. Its sibling, [MusicLounge Jukebox (Lite) for Plex](https://github.com/earthmonkey419/musiclounge),
+is a pared-down option for when all you want is to start a room or send a link, with no
+personal library browsing. Both are free, self-hosted, and share Room Mode and Share Mode,
+and both use the same gapless playback engine. Player adds personal search and browse,
+playlists, a persistent queue, radio, and more on top of that.
+
+|                            | Player | Jukebox (Lite) |
+| -------------------------- | :----: | :------------: |
+| Personal search & browse   |   ✓    |       —        |
+| Playlists (native + synced)|   ✓    |       —        |
+| Personal queue & transport |   ✓    |       —        |
+| Radio & mixes              |   ✓    |       —        |
+| Room Mode                  |   ✓    |       ✓        |
+| Share Mode                 |   ✓    |       ✓        |
+| Gapless playback           |   ✓    |       ✓        |
 
 Showcase site: [musicloungeplayer.vp-fun.com](https://musicloungeplayer.vp-fun.com)
 
 ## Features
 
-- **Search** your whole library, with fast infinite-scroll results — a "top matches" row of album results appears above tracks when relevant
-- **Browse** by Artist, Album, or Track, with sort (name, recently added, year, artist), plus an A-Z quickbar to jump straight to a letter in long lists
+- **Search** your whole library, with fast infinite-scroll results — album, artist, and playlist results appear as tile rows alongside the tracks when relevant. Results have Play All, Add to Queue, Play Next, and Add to Playlist buttons in the header
+- **Browse** by Artist, Album, or Track, with sort (name, recently added, year, artist), plus an A-Z quickbar to jump straight to a letter in long lists. Mood and Genre pill rows (genres need MusicMind) filter the search page
 - **Playlists** — build native playlists, or sync existing Plex playlists (synced ones stay read-only and always current)
-- **One shared "⋯" menu** on any track, album, or playlist — Play Next, Add to Queue, Add to Playlist, Start a Room, Share a Link, or (from a track) jump to its Album
-- **Persistent queue** — survives page reloads and navigation, with a real editable queue view (reorder, remove, jump-to-track)
+- **Radio and mixes** — start a continuous station from any track or album (⋯ menu → Start Radio), or from the search page: **Random Radio**, **Library Radio** (random tracks from the whole library), **Album Radio** (random albums back to back, each in album order), and **Recently Added** (a shuffled mix of everything added in the last 14 days). Stations top themselves up as the queue runs low. Track and album radio use MusicMind's tag and audio-analysis similarity when connected, and fall back to Plex's sonic analysis otherwise; Library and Album Radio need neither
+- **One shared "⋯" menu** on any track, album, or playlist — Play Next, Add to Queue, Add to Playlist, Start Radio, Start a Room, Share a Link, or (from a track) jump to its Album
+- **Persistent queue** — survives page reloads and navigation, with a real editable queue view (reorder, remove, jump-to-track) that opens scrolled to what's playing
+- **Gapless playback** between tracks, and **repeat** (off / all / one) on the player bar, remembered between visits
 - **Recently Played**, logged automatically once a track has genuinely been listened to (skips don't count)
-- **Expanded Now Playing view** — tap the mini-player for large art, a real scrub bar, full transport controls, and a proper side-by-side layout in landscape
+- **Expanded Now Playing view** — tap the mini-player for large art, a real scrub bar, full transport controls, and a proper side-by-side layout in landscape. The album name shows under the artist
+- **Lock-screen and CarPlay controls** — real title, artist, album, and art through the Media Session API
 - **Last.fm scrobbling** — connect once in Settings, then now-playing and scrobbles happen automatically
-- **Room Mode** — shared queue, one now-playing, join by QR code or short code
-- **Share Mode** — private links with configurable expiry, optional email delivery (with an embedded thumbnail)
+- **Room Mode** — shared queue, one now-playing, join by QR code or short code. The host can remove upcoming tracks from the queue; repeat is turned off in Rooms, since the server decides what plays next
+- **Share Mode** — private links with configurable expiry, optional email delivery (with an embedded thumbnail). Recipients see the artist on every track and a Now Playing card, and can tap the album art to enlarge it
 - **Installable PWA** — add to your phone's home screen for a real app icon and standalone (no browser chrome) experience
 - **AirPlay support** on iOS — works out of the box via Safari's own audio route picker, no extra setup
 - Persistent playback across navigation — the audio never stops just because you clicked something
@@ -116,7 +124,7 @@ Every setting is documented in `config.example.py`. The essentials:
 Optional integrations (fully functional with nothing else configured; these just add more):
 
 - **Last.fm scrobbling** — `LASTFM_API_KEY` / `LASTFM_API_SECRET` ([get a key](https://www.last.fm/api/account/create)), then connect your account once from Settings
-- **MusicMind bridge** — `MUSICMIND_DB_PATH`, an optional read-only companion database. Fully optional (everything falls back to live Plex queries with no missing functionality), but when connected it meaningfully accelerates search, mood/genre browsing, and Track browsing — MusicMind's own real genre data also powers the Genres pill row on the search page.
+- **MusicMind bridge** — `MUSICMIND_DB_PATH`, the path to [MusicMind for Plex](https://musicmind.vp-fun.com/)'s `musicmind.db`, an optional read-only companion database. Fully optional (everything falls back to live Plex queries with no missing functionality), but when connected it meaningfully accelerates search, mood/genre browsing, and Track browsing — MusicMind's own real genre data also powers the Genres pill row on the search page.
 - **SMTP** — for emailing Share Mode links directly instead of just copying them
 
 **Getting a Plex token (recommended):** give MusicLounge Player its own. On any
@@ -136,7 +144,9 @@ Devices, and give each of your apps its own token. (Plex's
 
 ## Architecture notes
 
-This is a single-admin, browser-based tool — there's no multi-user account system, by design. Anyone with the admin password has full access; anyone with a Room join code or Share link gets the scoped, guest-facing experience for that session only.
+This is a single-admin, browser-based tool — there's no multi-user account system, by design. Anyone with the admin password has full access; anyone with a Room join code or Share link gets the scoped, guest-facing experience for that session only. Starting a Room and creating Share links both require the admin login. Recipients and Room guests don't log in.
+
+Audio and cover art go through the app's own proxy, so your real Plex token never reaches a browser. `/stream/<id>` and `/art/<id>` don't answer anonymous requests: audio is limited to the admin and to tracks in a share link that browser has opened (checked against the live link on every request, so expiry and "End this link" cut it off immediately), and direct navigation to a stream URL is refused. This is access control, not DRM.
 
 ## Known limitations
 
@@ -148,4 +158,7 @@ MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-Part of the [Verbena Projects](https://vp-fun.com) family of Plex tools.
+Part of the [Verbena Projects](https://vp-fun.com) family of Plex tools, alongside
+[MusicLounge Jukebox (Lite) for Plex](https://github.com/earthmonkey419/musiclounge),
+[MusicMind for Plex](https://musicmind.vp-fun.com/), and
+[RiderMusic Jukebox for Plex](https://ridermusic.vp-fun.com/).
