@@ -35,6 +35,7 @@ def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = config.SECRET_KEY
     app.config["SESSION_COOKIE_SECURE"] = config.COOKIE_SECURE
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     # Bounds "Stay logged in" (see admin.login()) -- only sessions
     # explicitly marked session.permanent = True use this lifetime at
     # all; a normal login without the checkbox stays a browser-session
@@ -80,6 +81,12 @@ def create_app():
                     values["v"] = int(os.stat(os.path.join(app.static_folder, filename)).st_mtime)
                 except OSError:
                     pass
+
+    @app.after_request
+    def security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
 
     @app.after_request
     def no_store(response):

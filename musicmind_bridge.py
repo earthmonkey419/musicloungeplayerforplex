@@ -61,34 +61,49 @@ def _row_to_track_dict(row):
 
 
 def _musicmind_search(query, limit=POOL_SIZE):
-    q_like = f"%{query.lower()}%"
-    q_artist_like = f"%{query.lower().replace('.', '')}%"
+    # Every typed word must appear somewhere in artist/title/album (so
+    # "a love supreme" or "john coltrane" work), with whole-phrase hits
+    # ranked first: artist, then title, then album, then word-by-word.
+    phrase = " ".join(query.lower().replace(".", "").split())
+    tokens = phrase.split()
+    if not tokens:
+        return []
     conn = _connect()
     try:
         conn.row_factory = sqlite3.Row
         artist_expr = _artist_expr(conn)
-        artist_rows = conn.execute(
+        hay = (f"REPLACE(LOWER(COALESCE({artist_expr}, '') || ' ' || "
+               "COALESCE(title, '') || ' ' || COALESCE(album, '')), '.', '')")
+        where = " AND ".join([f"{hay} LIKE ?"] * len(tokens))
+        rows = conn.execute(
             f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
-            f"FROM tracks WHERE REPLACE(LOWER({artist_expr}), '.', '') LIKE ? LIMIT ?",
-            (q_artist_like, limit),
-        ).fetchall()
-        title_rows = conn.execute(
-            f"SELECT rating_key, title, {artist_expr} AS artist, album, duration_ms, play_count "
-            "FROM tracks WHERE LOWER(title) LIKE ? LIMIT ?",
-            (q_like, limit),
+            f"FROM tracks WHERE {where} LIMIT 2000",
+            [f"%{t}%" for t in tokens],
         ).fetchall()
     finally:
         conn.close()
 
+    def _norm(s):
+        return (s or "").lower().replace(".", "")
+
+    def _rank(d):
+        if phrase in _norm(d.get("artist")):
+            return 0
+        if phrase in _norm(d.get("title")):
+            return 1
+        if phrase in _norm(d.get("album")):
+            return 2
+        return 3
+
     results = []
     seen = set()
-    for row in list(artist_rows) + list(title_rows):
+    for row in rows:
         d = _row_to_track_dict(row)
         if d and d["rating_key"] not in seen:
             seen.add(d["rating_key"])
             results.append(d)
+    results.sort(key=_rank)  # stable: keeps DB order within a rank
     return results[:limit]
-
 
 def _build_search_pool(query):
     if is_available():

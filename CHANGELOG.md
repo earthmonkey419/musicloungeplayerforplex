@@ -6,6 +6,14 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Search: multi-word queries now work ("a love supreme", "john coltrane"); every word must match somewhere in the artist, title or album, with whole-phrase matches on artist, then title, then album ranked first
+- Streaming: the proxy now closes its Plex connection when playback stops or the listener disconnects, uses timeouts, and answers 502 instead of hanging when Plex is unreachable
+- Room guest page: starting a new search is no longer ignored while an earlier search is still loading
+
+### Security
+- Session cookie is now `SameSite=Lax`; every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`
+
 ## [2.4.0] - 2026-11-03
 
 ### Added

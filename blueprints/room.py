@@ -461,11 +461,17 @@ def stream(rating_key):
     if "Range" in request.headers:
         headers["Range"] = request.headers["Range"]
 
-    upstream = requests.get(plex_url, headers=headers, stream=True)
+    try:
+        upstream = requests.get(plex_url, headers=headers, stream=True, timeout=(5, 30))
+    except requests.RequestException:
+        return "Upstream unavailable", 502
 
     def generate():
-        for chunk in upstream.iter_content(chunk_size=8192):
-            yield chunk
+        try:
+            for chunk in upstream.iter_content(chunk_size=8192):
+                yield chunk
+        finally:
+            upstream.close()
 
     resp = Response(
         stream_with_context(generate()),
