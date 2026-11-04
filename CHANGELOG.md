@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-11-03
+
 ### Added
 - Share-link activity for hosts: each share link records when it is opened and which tracks are started and finished, with link-preview bots (iMessage, Slack, Facebook, crawlers) filtered out. Visitors are counted with an anonymous per-browser hash, never an IP address, and the recipient page says the host can see this activity. New installs get the table from `init_db.py`; existing installs run `python3 migrate_share_events.py` and then `python3 migrate_share_archive.py` once
 - Settings page: each share link now has an **Activity** button that expands opens, unique visitors, listeners, tracks started/finished (per track, with names), device and referrer mix, and an hourly timeline. The old "Plays" column is now "Opens", with a Listening column beside it, and the shares CSV export includes the activity totals
