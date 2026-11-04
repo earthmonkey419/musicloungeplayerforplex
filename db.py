@@ -382,7 +382,10 @@ import hmac
 import re
 
 SHARE_EVENT_TYPES = ("open", "play_start", "play_complete")
-SHARE_EVENT_RETENTION_DAYS = 90
+# 0 / unset = keep history forever. Read lazily so an existing config.py
+# without the setting keeps working.
+def _retention_days():
+    return int(getattr(config, "SHARE_EVENT_RETENTION_DAYS", 0) or 0)
 _OPEN_DEDUPE_MINUTES = 30        # one "open" per visitor per half hour
 _PLAY_DEDUPE_SECONDS = 20        # same visitor+track+type inside this = repeat beacon
 _MAX_EVENTS_PER_MINUTE = 60      # per visitor per share; beyond this is noise or abuse
@@ -425,7 +428,9 @@ def referrer_host(referrer):
     Returns '' for no/garbage referrer and 'direct' is applied at display."""
     if not referrer:
         return ""
-    m = re.match(r"^[a-z][a-z0-9+.-]*://([^/:?#]+)", referrer.strip(), re.I)
+    # Hostname characters only: this value comes from the visitor's browser
+    # and is later shown on the admin page, so never store anything else.
+    m = re.match(r"^[a-z][a-z0-9+.-]*://([a-z0-9.-]+)(?:[/:?#]|$)", referrer.strip(), re.I)
     return m.group(1).lower()[:80] if m else ""
 
 
@@ -439,7 +444,7 @@ def visitor_hash(visitor_id, share_token):
 
 
 def record_share_event(share_token, event_type, vhash, track_ref=None,
-                       device=None, referrer=None):
+                       device=None, referrer=None, track_title=None):
     """Inserts one event unless it is a repeat or over a limit. Returns True
     if a row was written. Never raises for 'expected' rejections."""
     if event_type not in SHARE_EVENT_TYPES:
@@ -477,9 +482,10 @@ def record_share_event(share_token, event_type, vhash, track_ref=None,
             return False
 
         conn.execute(
-            "INSERT INTO share_events (share_token, event_type, ts, visitor_hash, track_ref, device, referrer) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (share_token, event_type, now.isoformat(), vhash, track_ref, device, referrer or None),
+            "INSERT INTO share_events (share_token, event_type, ts, visitor_hash, track_ref, "
+            "track_title, device, referrer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (share_token, event_type, now.isoformat(), vhash, track_ref,
+             (track_title or None) and track_title[:200], device, referrer or None),
         )
         conn.commit()
         return True
@@ -515,7 +521,7 @@ def get_share_activity(share_token):
 
         per_track = [
             dict(r) for r in conn.execute(
-                "SELECT track_ref, "
+                "SELECT track_ref, MAX(track_title) AS title, "
                 "SUM(event_type = 'play_start') AS started, "
                 "SUM(event_type = 'play_complete') AS completed "
                 "FROM share_events WHERE share_token = ? AND track_ref IS NOT NULL "
@@ -565,18 +571,85 @@ def get_share_activity(share_token):
         conn.close()
 
 
-def delete_events_for_missing_shares():
-    """Explicit stand-in for ON DELETE CASCADE (foreign keys are off)."""
+def get_share_activity_summaries(tokens):
+    """{token: {opens, unique_visitors, listeners, plays_started,
+    plays_completed}} for many shares in one query -- the stats table
+    uses this instead of one query per row."""
+    tokens = list(tokens)
+    if not tokens:
+        return {}
+    out = {t: {"opens": 0, "unique_visitors": 0, "listeners": 0,
+               "plays_started": 0, "plays_completed": 0} for t in tokens}
+    conn = get_db()
+    try:
+        for i in range(0, len(tokens), 400):          # stay under SQLite's variable limit
+            chunk = tokens[i:i + 400]
+            marks = ",".join("?" * len(chunk))
+            for r in conn.execute(
+                "SELECT share_token, "
+                "SUM(event_type = 'open'), "
+                "COUNT(DISTINCT CASE WHEN event_type = 'open' THEN visitor_hash END), "
+                "COUNT(DISTINCT CASE WHEN event_type IN ('play_start', 'play_complete') THEN visitor_hash END), "
+                "SUM(event_type = 'play_start'), SUM(event_type = 'play_complete') "
+                f"FROM share_events WHERE share_token IN ({marks}) GROUP BY share_token",
+                chunk,
+            ):
+                out[r[0]] = {"opens": r[1] or 0, "unique_visitors": r[2] or 0,
+                             "listeners": r[3] or 0, "plays_started": r[4] or 0,
+                             "plays_completed": r[5] or 0}
+    finally:
+        conn.close()
+    return out
+
+
+def archive_finished_shares():
+    """'Clear expired/revoked' -- hides finished links from the default
+    list but keeps the share row and ALL of its activity. Live links are
+    never touched. Returns how many were archived."""
+    now = _now()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE shares SET archived_at = ? WHERE archived_at IS NULL "
+        "AND (revoked = 1 OR expires_at <= ?)",
+        (now, now),
+    )
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return n
+
+
+def set_share_archived(token, archived):
     conn = get_db()
     conn.execute(
-        "DELETE FROM share_events WHERE share_token NOT IN (SELECT share_token FROM shares)"
+        "UPDATE shares SET archived_at = ? WHERE share_token = ?",
+        (_now() if archived else None, token),
     )
     conn.commit()
     conn.close()
 
 
-def prune_share_events(days=SHARE_EVENT_RETENTION_DAYS):
-    """Drops events older than the retention window. Returns rows deleted."""
+def delete_share_permanently(token):
+    """The only path that destroys share history. Refuses a live link
+    (end it first). Returns True if something was deleted."""
+    if is_share_live(token):
+        return False
+    conn = get_db()
+    conn.execute("DELETE FROM share_events WHERE share_token = ?", (token,))
+    cur = conn.execute("DELETE FROM shares WHERE share_token = ?", (token,))
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return n > 0
+
+
+def prune_share_events(days=None):
+    """Optional retention. Does nothing unless a positive number of days
+    is passed or SHARE_EVENT_RETENTION_DAYS is set -- history is kept
+    forever by default. Returns rows deleted."""
+    days = _retention_days() if days is None else days
+    if days <= 0:
+        return 0
     cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
     conn = get_db()
     cur = conn.execute("DELETE FROM share_events WHERE ts < ?", (cutoff,))

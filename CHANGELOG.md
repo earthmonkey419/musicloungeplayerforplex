@@ -7,7 +7,10 @@ this project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Share-link activity logging (first phase of host-side link activity): each share link now records when it is opened and which tracks are started and finished, with link-preview bots (iMessage, Slack, Facebook, crawlers) filtered out. Visitors are counted with an anonymous per-browser hash, never an IP address, and the recipient page says activity is visible to the host. Events are kept 90 days. Existing installs run `python3 migrate_share_events.py` once (new installs get the table from `init_db.py`). The host-facing Activity panel is the next phase
+- Share-link activity for hosts: each share link records when it is opened and which tracks are started and finished, with link-preview bots (iMessage, Slack, Facebook, crawlers) filtered out. Visitors are counted with an anonymous per-browser hash, never an IP address, and the recipient page says the host can see this activity. New installs get the table from `init_db.py`; existing installs run `python3 migrate_share_events.py` and then `python3 migrate_share_archive.py` once
+- Settings page: each share link now has an **Activity** button that expands opens, unique visitors, listeners, tracks started/finished (per track, with names), device and referrer mix, and an hourly timeline. The old "Plays" column is now "Opens", with a Listening column beside it, and the shares CSV export includes the activity totals
+- Share-link history is kept: "Clear expired/revoked" is now **Archive expired/revoked**. Archived links are hidden from the list (use **Show archived**, with a Restore button) but keep all their activity. A separate **Delete…** button permanently removes a finished link and its history. Track names are saved with each play so old activity stays readable if a track later leaves Plex
+- New optional `SHARE_EVENT_RETENTION_DAYS` setting (default 0 = keep activity forever)
 - The album name now shows under the artist in the bottom player bar and in the expanded Now Playing view
 - Two new station buttons on the search page: **Library Radio** (random tracks from the whole library) and **Album Radio** (random albums back to back, each in album order). Both are continuous like the other stations and work without MusicMind or Plex sonic analysis
 

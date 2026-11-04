@@ -9,7 +9,7 @@ import config
 import db
 import plex_client
 import lastfm_client
-from auth import admin_required
+from auth import admin_required, admin_api_required
 from email_utils import send_password_reset_email
 
 bp = Blueprint("admin", __name__)
@@ -19,6 +19,7 @@ SHARE_CSV_COLUMNS = [
     "share_token", "content_type", "content_ref", "content_title", "content_artist",
     "created_at", "expires_at", "duration_hours", "delivery_method", "recipient_email",
     "from_display_name", "revoked", "access_count", "last_accessed_at",
+    "archived_at", "opens", "unique_visitors", "listeners", "plays_started", "plays_completed",
 ]
 ROOM_CSV_COLUMNS = [
     "session_id", "room_name", "join_code", "started_at", "expires_at", "ended_by_admin",
@@ -116,10 +117,19 @@ def stats():
     conn = db.get_db()
     now = datetime.utcnow().isoformat()
 
-    share_rows = conn.execute("SELECT * FROM shares ORDER BY created_at DESC LIMIT 200").fetchall()
+    show_archived = request.args.get("archived") == "1"
+    archived_count = conn.execute(
+        "SELECT COUNT(*) FROM shares WHERE archived_at IS NOT NULL"
+    ).fetchone()[0]
+    where = "" if show_archived else "WHERE archived_at IS NULL"
+    share_rows = conn.execute(
+        f"SELECT * FROM shares {where} ORDER BY created_at DESC LIMIT 200"
+    ).fetchall()
+    summaries = db.get_share_activity_summaries([r["share_token"] for r in share_rows])
     shares = []
     for row in share_rows:
         d = dict(row)
+        d["activity"] = summaries[d["share_token"]]
         if d["revoked"]:
             d["status"] = "revoked"
         elif d["expires_at"] <= now:
@@ -136,6 +146,8 @@ def stats():
     return render_template(
         "admin_stats.html",
         shares=shares,
+        show_archived=show_archived,
+        archived_count=archived_count,
         rooms=rooms,
         lastfm_configured=lastfm_client.is_configured(),
         lastfm_authorized=lastfm_client.is_authorized(),
@@ -190,7 +202,10 @@ def stats_download(kind):
 
     conn = db.get_db()
     if kind == "shares":
-        rows = conn.execute("SELECT * FROM shares ORDER BY created_at DESC").fetchall()
+        rows = [dict(r) for r in conn.execute("SELECT * FROM shares ORDER BY created_at DESC").fetchall()]
+        summaries = db.get_share_activity_summaries([r["share_token"] for r in rows])
+        for r in rows:
+            r.update(summaries[r["share_token"]])
         columns = SHARE_CSV_COLUMNS
     else:
         rows = conn.execute("SELECT * FROM room_sessions ORDER BY started_at DESC").fetchall()
@@ -212,18 +227,55 @@ def stats_download(kind):
 @admin_required
 def stats_clear():
     kind = request.form.get("kind")
-    conn = db.get_db()
-    now = datetime.utcnow().isoformat()
     if kind == "shares":
-        conn.execute("DELETE FROM shares WHERE revoked = 1 OR expires_at <= ?", (now,))
+        # Archive, don't delete: the link row and all of its activity
+        # history stay. See db.archive_finished_shares.
+        db.archive_finished_shares()
+        db.prune_share_events()      # no-op unless SHARE_EVENT_RETENTION_DAYS is set
     elif kind == "rooms":
+        conn = db.get_db()
         conn.execute("DELETE FROM room_sessions WHERE ended_by_admin = 1")
-    conn.commit()
-    conn.close()
-    if kind == "shares":
-        db.delete_events_for_missing_shares()
-        db.prune_share_events()
+        conn.commit()
+        conn.close()
     return redirect(url_for("admin.stats"))
+
+
+@bp.route("/stats/unarchive-share", methods=["POST"])
+@admin_required
+def stats_unarchive_share():
+    token = request.form.get("token")
+    if token:
+        db.set_share_archived(token, False)
+    return redirect(url_for("admin.stats", archived="1"))
+
+
+@bp.route("/stats/delete-share", methods=["POST"])
+@admin_required
+def stats_delete_share():
+    """Permanently removes a finished link AND its activity history.
+    Refuses live links (End the link first)."""
+    token = request.form.get("token")
+    if token:
+        db.delete_share_permanently(token)
+    return redirect(url_for("admin.stats", archived="1" if request.form.get("archived") == "1" else None))
+
+
+@bp.route("/stats/activity/<token>")
+@admin_api_required
+def stats_activity(token):
+    """Detail for one share's expandable Activity row (loaded on demand)."""
+    share = db.get_share(token)
+    if not share:
+        return jsonify({"error": "not found"}), 404
+    data = db.get_share_activity(token)
+    return jsonify({
+        "title": share["content_title"],
+        "artist": share["content_artist"],
+        "created_at": share["created_at"],
+        "expires_at": share["expires_at"],
+        "legacy_opens": share["access_count"],
+        "activity": data,
+    })
 
 
 @bp.route("/stats/end-room", methods=["POST"])

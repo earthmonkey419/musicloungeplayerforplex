@@ -34,12 +34,15 @@
 
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-    <div class="room-card-label" style="margin:0;">SHARE LINKS ({{ shares|length }})</div>
-    <div style="display:flex; gap:8px;">
+    <div class="room-card-label" style="margin:0;">SHARE LINKS ({{ shares|length }}{% if show_archived %}, incl. archived{% endif %})</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+      {% if archived_count or show_archived %}
+      <a href="{{ url_for('admin.stats', archived=('' if show_archived else '1')) }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">{% if show_archived %}Hide archived{% else %}Show archived ({{ archived_count }}){% endif %}</a>
+      {% endif %}
       <a href="{{ url_for('admin.stats_download', kind='shares') }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">⬇ Download CSV</a>
-      <form method="post" action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Clear expired and revoked share links? Live links are never affected.');" style="display:inline;">
+      <form method="post" action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Archive expired and revoked share links? They are hidden from this list but keep all their history (use Show archived to see them). Live links are never affected.');" style="display:inline;">
         <input type="hidden" name="kind" value="shares">
-        <button type="submit" class="btn-secondary" style="padding:6px 12px; font-size:12px;">🗑 Clear expired/revoked</button>
+        <button type="submit" class="btn-secondary" style="padding:6px 12px; font-size:12px;">📦 Archive expired/revoked</button>
       </form>
     </div>
   </div>
@@ -51,10 +54,11 @@
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Content</th>
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Type</th>
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Status</th>
-          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Plays</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Opens</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Listening</th>
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Created</th>
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Expires</th>
-          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Last Played</th>
+          <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Last Opened</th>
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Sent To</th>
           <th style="padding:8px 6px; position:sticky; top:0; background:var(--pl-surface); border-bottom:2px solid var(--pl-teal);">Actions</th>
         </tr>
@@ -69,20 +73,43 @@
             {% elif s.status == "expired" %}<span class="pl-badge pl-badge-neutral">EXPIRED</span>
             {% else %}<span class="pl-badge pl-badge-revoked">REVOKED</span>{% endif %}
           </td>
-          <td style="padding:8px 6px; font-weight:700;">{{ s.access_count }}</td>
+          {% set a = s.activity %}
+          <td style="padding:8px 6px; font-weight:700;" {% if not a.opens and s.access_count %}title="Counted before detailed activity tracking was added"{% endif %}>
+            {{ a.opens if a.opens else s.access_count }}{% if a.unique_visitors > 1 %}<span style="font-weight:400; color:var(--pl-text-secondary); font-size:12px;"> · {{ a.unique_visitors }} people</span>{% endif %}
+          </td>
+          <td style="padding:8px 6px; font-size:12px; color:var(--pl-text-secondary);">
+            {% if a.plays_started %}<strong style="color:inherit;">{{ a.listeners }}</strong> listener{{ "" if a.listeners == 1 else "s" }}<br>{{ a.plays_started }} started · {{ a.plays_completed }} finished{% else %}--{% endif %}
+          </td>
           <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.created_at[:16] if s.created_at else "--" }}</td>
           <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.expires_at[:16] if s.expires_at else "--" }}</td>
           <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.last_accessed_at[:16] if s.last_accessed_at else "never" }}</td>
           <td style="padding:8px 6px; color:var(--pl-text-secondary); font-size:12px;">{{ s.recipient_email or (s.delivery_method or "not sent yet") }}</td>
-          <td style="padding:8px 6px;">
+          <td style="padding:8px 6px; white-space:nowrap;">
+            <button type="button" class="btn-secondary" data-activity="{{ s.share_token }}" aria-expanded="false" style="padding:5px 10px; font-size:11px; margin-right:4px;">📈 Activity</button>
             {% if s.status == "live" %}
             <button type="button" class="btn-secondary" data-copy-share="{{ s.share_token }}" style="padding:5px 10px; font-size:11px; margin-right:4px;">📋 Copy Link</button>
             <form method="post" action="{{ url_for('admin.stats_revoke_share') }}" onsubmit="return confirm('End this link? It will stop working immediately.');" style="display:inline;">
               <input type="hidden" name="token" value="{{ s.share_token }}">
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Link</button>
             </form>
+            {% else %}
+            {% if s.archived_at %}
+            <span class="pl-badge pl-badge-neutral" style="margin-right:4px;">ARCHIVED</span>
+            <form method="post" action="{{ url_for('admin.stats_unarchive_share') }}" style="display:inline;">
+              <input type="hidden" name="token" value="{{ s.share_token }}">
+              <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px; margin-right:4px;">Restore</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('admin.stats_delete_share') }}" onsubmit="return confirm('Permanently delete this link AND all of its activity history? This cannot be undone. (Archiving keeps the history.)');" style="display:inline;">
+              <input type="hidden" name="token" value="{{ s.share_token }}">
+              {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
+              <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">Delete…</button>
+            </form>
             {% endif %}
           </td>
+        </tr>
+        <tr class="activity-row" data-activity-row="{{ s.share_token }}" hidden>
+          <td colspan="10" style="padding:0 6px 14px;"><div class="activity-body" style="border:1px solid var(--pl-border); border-radius:var(--pl-radius-md, 10px); padding:14px; background:var(--pl-bg, transparent);">Loading…</div></td>
         </tr>
         {% endfor %}
       </tbody>
@@ -171,6 +198,155 @@
         if (legacyCopy(url)) done(); else manual();
       });
     } else if (legacyCopy(url)) { done(); } else { manual(); }
+  });
+})();
+</script>
+<script>
+(function () {
+  // spa-nav.js re-runs inline scripts on every in-app navigation; bind the
+  // document-level handler only once or the expand toggle would flip twice.
+  if (window.__mlActivityBound) return;
+  window.__mlActivityBound = true;
+  var URL_TMPL = {{ url_for('admin.stats_activity', token='__T__')|tojson }};
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function el(tag, text, style) {
+    var n = document.createElement(tag);
+    if (text !== undefined && text !== null) n.textContent = text;
+    if (style) n.style.cssText = style;
+    return n;
+  }
+  function local(ts) {            // server timestamps are UTC without a "Z"
+    if (!ts) return "--";
+    var d = new Date(ts.length <= 13 ? ts + ":00:00Z" : ts + "Z");
+    return isNaN(d) ? ts : d.toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
+  }
+  function tile(label, value, sub) {
+    var t = el("div", null, "flex:1 1 110px; padding:10px 12px; border:1px solid var(--pl-border); border-radius:8px;");
+    t.appendChild(el("div", label, "font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--pl-text-secondary);"));
+    t.appendChild(el("div", value, "font-size:22px; font-weight:700;"));
+    if (sub) t.appendChild(el("div", sub, "font-size:11px; color:var(--pl-text-secondary);"));
+    return t;
+  }
+  function heading(text) {
+    return el("div", text, "font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--pl-text-secondary); margin:16px 0 6px;");
+  }
+  function pairs(obj) {
+    var keys = Object.keys(obj);
+    if (!keys.length) return "--";
+    return keys.sort(function (a, b) { return obj[b] - obj[a]; })
+      .map(function (k) { return k + " " + obj[k]; }).join("  ·  ");
+  }
+
+  // Hourly buckets -> inline SVG, gaps filled with zero so time is honest.
+  function sparkline(timeline) {
+    if (!timeline.length) return null;
+    function hourMs(h) { return Date.parse(h + ":00:00Z"); }
+    var first = hourMs(timeline[0].hour), last = hourMs(timeline[timeline.length - 1].hour);
+    var byHour = {};
+    timeline.forEach(function (b) { byHour[hourMs(b.hour)] = b; });
+    var pts = [];
+    for (var t = first; t <= last; t += 3600000) {
+      var b = byHour[t];
+      pts.push({opens: b ? b.opens : 0, plays: b ? b.plays : 0});
+    }
+    var W = 560, H = 70, pad = 4;
+    var max = Math.max.apply(null, pts.map(function (p) { return Math.max(p.opens, p.plays); })) || 1;
+    var n = pts.length, step = n > 1 ? (W - 2 * pad) / (n - 1) : 0;
+    function line(key, color) {
+      var d = pts.map(function (p, i) {
+        var x = n > 1 ? pad + i * step : W / 2;
+        var y = H - pad - (p[key] / max) * (H - 2 * pad);
+        return (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+      }).join(" ");
+      var path = document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", d); path.setAttribute("fill", "none");
+      path.setAttribute("stroke", color); path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linejoin", "round");
+      return path;
+    }
+    var svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.style.cssText = "width:100%; height:70px; display:block;";
+    svg.appendChild(line("opens", "var(--pl-teal)"));
+    svg.appendChild(line("plays", "var(--pl-text-secondary)"));
+    var wrap = el("div");
+    wrap.appendChild(svg);
+    var cap = el("div", null, "display:flex; justify-content:space-between; font-size:11px; color:var(--pl-text-secondary);");
+    cap.appendChild(el("span", local(timeline[0].hour)));
+    cap.appendChild(el("span", "teal = opens, grey = tracks started (per hour, peak " + max + ")"));
+    cap.appendChild(el("span", local(timeline[timeline.length - 1].hour)));
+    wrap.appendChild(cap);
+    return wrap;
+  }
+
+  function render(body, data) {
+    body.textContent = "";
+    var a = data.activity;
+    if (!a.opens && !a.plays_started) {
+      body.appendChild(el("div", "No activity recorded for this link yet."));
+      if (data.legacy_opens)
+        body.appendChild(el("div", data.legacy_opens + " open(s) were counted before detailed tracking was added.",
+          "color:var(--pl-text-secondary); font-size:12px; margin-top:4px;"));
+      return;
+    }
+    var tiles = el("div", null, "display:flex; gap:8px; flex-wrap:wrap;");
+    var rate = a.plays_started ? Math.round(100 * a.plays_completed / a.plays_started) + "% finished" : "";
+    tiles.appendChild(tile("Opens", a.opens, a.unique_visitors + " unique visitor" + (a.unique_visitors === 1 ? "" : "s")));
+    tiles.appendChild(tile("Listeners", a.listeners, a.opens ? "of " + a.unique_visitors + " who opened it" : ""));
+    tiles.appendChild(tile("Tracks started", a.plays_started));
+    tiles.appendChild(tile("Tracks finished", a.plays_completed, rate));
+    body.appendChild(tiles);
+
+    body.appendChild(el("div", "First opened " + local(a.first_open) + "  ·  last opened " + local(a.last_open),
+      "color:var(--pl-text-secondary); font-size:12px; margin-top:8px;"));
+
+    var sp = sparkline(a.timeline);
+    if (sp) { body.appendChild(heading("Over time")); body.appendChild(sp); }
+
+    if (a.per_track.length) {
+      body.appendChild(heading("By track"));
+      var top = Math.max.apply(null, a.per_track.map(function (t) { return t.started; })) || 1;
+      var table = el("table", null, "width:100%; border-collapse:collapse; font-size:13px;");
+      a.per_track.forEach(function (t) {
+        var tr = el("tr", null, "border-bottom:1px solid var(--pl-border);");
+        tr.appendChild(el("td", t.title || ("Track #" + t.track_ref), "padding:5px 6px; width:50%;"));
+        var barCell = el("td", null, "padding:5px 6px;");
+        var bar = el("div", null, "height:8px; border-radius:4px; background:var(--pl-teal); width:" + Math.max(4, Math.round(100 * t.started / top)) + "%;");
+        barCell.appendChild(bar);
+        tr.appendChild(barCell);
+        tr.appendChild(el("td", t.started + " started · " + t.completed + " finished",
+          "padding:5px 6px; white-space:nowrap; color:var(--pl-text-secondary); font-size:12px;"));
+        table.appendChild(tr);
+      });
+      body.appendChild(table);
+    }
+
+    var meta = el("div", null, "display:flex; gap:24px; flex-wrap:wrap; font-size:13px; margin-top:4px;");
+    var d = el("div"); d.appendChild(heading("Devices")); d.appendChild(el("div", pairs(a.devices)));
+    var r = el("div"); r.appendChild(heading("Came from")); r.appendChild(el("div", pairs(a.referrers)));
+    meta.appendChild(d); meta.appendChild(r);
+    body.appendChild(meta);
+    body.appendChild(el("div", "Visitors are anonymous (no IP addresses or accounts). Times are in your local time zone.",
+      "color:var(--pl-text-secondary); font-size:11px; margin-top:12px;"));
+  }
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-activity]");
+    if (!btn) return;
+    var token = btn.getAttribute("data-activity");
+    var row = document.querySelector('[data-activity-row="' + token + '"]');
+    if (!row) return;
+    var open = !row.hidden;
+    row.hidden = open;
+    btn.setAttribute("aria-expanded", String(!open));
+    if (open || row.getAttribute("data-loaded")) return;
+    var body = row.querySelector(".activity-body");
+    fetch(URL_TMPL.replace("__T__", encodeURIComponent(token)), {credentials: "same-origin"})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (data) { render(body, data); row.setAttribute("data-loaded", "1"); })
+      .catch(function () { body.textContent = "Couldn't load activity. Try again."; });
   });
 })();
 </script>

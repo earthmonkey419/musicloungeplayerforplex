@@ -1,4 +1,5 @@
 import secrets
+import time
 
 from flask import Blueprint, render_template, current_app, request, session
 
@@ -7,6 +8,35 @@ import plex_client
 import media_access
 
 bp = Blueprint("linked", __name__)
+
+# {share_token: (timestamp, {rating_key: "Title -- Artist"})}. Used only to
+# snapshot a readable track title into each activity event, so history
+# still reads properly after a track is removed from Plex.
+_TITLES_TTL = 600
+_titles_cache = {}
+
+
+def _display_title(track):
+    title = (track.get("title") or "").strip()
+    artist = (track.get("artist") or "").strip()
+    return f"{title} \u2014 {artist}" if title and artist else (title or artist)
+
+
+def _remember_titles(token, tracks):
+    _titles_cache[token] = (time.time(), {str(t["rating_key"]): _display_title(t) for t in tracks})
+
+
+def _track_title(token, track_ref):
+    hit = _titles_cache.get(token)
+    if not hit or time.time() - hit[0] > _TITLES_TTL:
+        share = db.get_share(token)
+        try:
+            _, _, tracks = plex_client.get_content_tracks(share["content_type"], share["content_ref"])
+            _remember_titles(token, tracks)
+        except Exception:
+            return None
+        hit = _titles_cache.get(token)
+    return hit[1].get(str(track_ref)) if hit else None
 
 
 @bp.route("/<share_token>")
@@ -30,6 +60,7 @@ def view_share(share_token):
         tracks = []
 
     media_access.remember_share(share_token, share["content_ref"], tracks)
+    _remember_titles(share_token, tracks)
 
     # Link-preview fetchers (iMessage, Slack, Facebook...) still get the
     # page -- they need the og: tags -- but never count as an open.
@@ -88,5 +119,6 @@ def share_event(share_token):
         track_ref=track_ref,
         device=db.classify_device(ua),
         referrer=referrer,
+        track_title=_track_title(share_token, track_ref) if track_ref else None,
     )
     return "", 204
