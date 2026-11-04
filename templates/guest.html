@@ -113,7 +113,11 @@ function runTagExplore() {
 }
 
 function loadResultsPage(isFirstPage) {
-  if (isLoadingResults || !currentQueryType) return;
+  if (!currentQueryType) return;
+  // A new query (page 1) must never be dropped because an older request is still
+  // in flight -- the stale-response check below discards the old answer. Only
+  // infinite-scroll pagination needs the in-flight guard.
+  if (isLoadingResults && !isFirstPage) return;
   isLoadingResults = true;
   const type = currentQueryType;
   const value = currentQueryValue;
