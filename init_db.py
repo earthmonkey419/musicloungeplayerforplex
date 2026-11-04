@@ -83,9 +83,42 @@ CREATE TABLE IF NOT EXISTS shares (
     from_display_name TEXT,
     revoked           INTEGER DEFAULT 0,
     access_count      INTEGER DEFAULT 0,
-    last_accessed_at  TEXT
+    last_accessed_at  TEXT,
+    archived_at       TEXT
 )
 """)
+
+# ---------------------------------------------------------------
+# Share activity (one row per event on a share link)
+#
+# event_type: 'open' | 'play_start' | 'play_complete'. Aggregated on
+# read (see db.get_share_activity). visitor_hash is an HMAC of a random
+# per-browser id and the share token -- never an IP or a raw cookie
+# value, and not linkable across different shares. Rows are deleted
+# with their share only on an explicit permanent delete (foreign keys
+# are not enforced on this connection, so db.delete_share_permanently
+# removes them itself). Clearing expired/revoked links ARCHIVES them
+# (shares.archived_at) and keeps their history. track_title is a
+# snapshot taken when the event happens, so history stays readable
+# after a track is removed from Plex. Optional pruning:
+# config.SHARE_EVENT_RETENTION_DAYS (default 0 = keep everything).
+# ---------------------------------------------------------------
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS share_events (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    share_token   TEXT NOT NULL,
+    event_type    TEXT NOT NULL CHECK (event_type IN ('open', 'play_start', 'play_complete')),
+    ts            TEXT NOT NULL,
+    visitor_hash  TEXT NOT NULL,
+    track_ref     TEXT,
+    track_title   TEXT,
+    device        TEXT,
+    referrer      TEXT,
+    FOREIGN KEY (share_token) REFERENCES shares(share_token) ON DELETE CASCADE
+)
+""")
+c.execute("CREATE INDEX IF NOT EXISTS idx_share_events_token_ts ON share_events (share_token, ts)")
 
 # ---------------------------------------------------------------
 # Password reset tokens -- unchanged

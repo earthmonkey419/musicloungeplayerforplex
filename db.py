@@ -375,6 +375,290 @@ def mark_share_delivery(token, method, recipient_email=None, from_display_name=N
     conn.close()
 
 
+# --- Share activity (share_events) -----------------------------------------
+
+import hashlib
+import hmac
+import re
+
+SHARE_EVENT_TYPES = ("open", "play_start", "play_complete")
+# 0 / unset = keep history forever. Read lazily so an existing config.py
+# without the setting keeps working.
+def _retention_days():
+    return int(getattr(config, "SHARE_EVENT_RETENTION_DAYS", 0) or 0)
+_OPEN_DEDUPE_MINUTES = 30        # one "open" per visitor per half hour
+_PLAY_DEDUPE_SECONDS = 20        # same visitor+track+type inside this = repeat beacon
+_MAX_EVENTS_PER_MINUTE = 60      # per visitor per share; beyond this is noise or abuse
+_MAX_EVENTS_PER_SHARE = 20000    # hard cap so a runaway client cannot grow the DB
+
+# Link-preview fetchers, crawlers and scripted clients. Previews must still
+# get the page (og: tags), they just never count as a listener.
+_BOT_RE = re.compile(
+    r"bot|crawl|spider|slurp|preview|facebookexternalhit|facebot|whatsapp|"
+    r"telegram|discord|slack|skype|linkedin|pinterest|embedly|quora|"
+    r"applebot|google-?read-?aloud|headless|curl|wget|python-requests|"
+    r"httpx|aiohttp|go-http-client|okhttp|java/|libwww|postman",
+    re.I,
+)
+
+
+def is_bot_user_agent(user_agent):
+    """Empty UA counts as a bot: every real browser sends one."""
+    if not user_agent:
+        return True
+    return bool(_BOT_RE.search(user_agent))
+
+
+def classify_device(user_agent):
+    """Deliberately coarse -- enough to tell phone from desktop, no more."""
+    ua = (user_agent or "").lower()
+    if "ipad" in ua or "tablet" in ua:
+        return "tablet"
+    if "iphone" in ua or "ipod" in ua or ("android" in ua and "mobile" in ua):
+        return "phone"
+    if "android" in ua:
+        return "tablet"
+    if "windows" in ua or "macintosh" in ua or "x11" in ua or "cros" in ua:
+        return "desktop"
+    return "other"
+
+
+def referrer_host(referrer):
+    """Host only, lowercased, no path or query (those can carry tokens).
+    Returns '' for no/garbage referrer and 'direct' is applied at display."""
+    if not referrer:
+        return ""
+    # Hostname characters only: this value comes from the visitor's browser
+    # and is later shown on the admin page, so never store anything else.
+    m = re.match(r"^[a-z][a-z0-9+.-]*://([a-z0-9.-]+)(?:[/:?#]|$)", referrer.strip(), re.I)
+    return m.group(1).lower()[:80] if m else ""
+
+
+def visitor_hash(visitor_id, share_token):
+    """HMAC of the random per-browser id with the share token, keyed by the
+    app secret. Stable within one share, unlinkable across shares, and
+    useless without SECRET_KEY."""
+    key = (config.SECRET_KEY or "").encode()
+    msg = f"{visitor_id}|{share_token}".encode()
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()[:16]
+
+
+def record_share_event(share_token, event_type, vhash, track_ref=None,
+                       device=None, referrer=None, track_title=None):
+    """Inserts one event unless it is a repeat or over a limit. Returns True
+    if a row was written. Never raises for 'expected' rejections."""
+    if event_type not in SHARE_EVENT_TYPES:
+        return False
+    now = datetime.utcnow()
+    conn = get_db()
+    try:
+        recent = conn.execute(
+            "SELECT COUNT(*) FROM share_events WHERE share_token = ? AND visitor_hash = ? AND ts > ?",
+            (share_token, vhash, (now - timedelta(minutes=1)).isoformat()),
+        ).fetchone()[0]
+        if recent >= _MAX_EVENTS_PER_MINUTE:
+            return False
+        total = conn.execute(
+            "SELECT COUNT(*) FROM share_events WHERE share_token = ?", (share_token,)
+        ).fetchone()[0]
+        if total >= _MAX_EVENTS_PER_SHARE:
+            return False
+
+        if event_type == "open":
+            window = (now - timedelta(minutes=_OPEN_DEDUPE_MINUTES)).isoformat()
+            dup = conn.execute(
+                "SELECT 1 FROM share_events WHERE share_token = ? AND visitor_hash = ? "
+                "AND event_type = 'open' AND ts > ? LIMIT 1",
+                (share_token, vhash, window),
+            ).fetchone()
+        else:
+            window = (now - timedelta(seconds=_PLAY_DEDUPE_SECONDS)).isoformat()
+            dup = conn.execute(
+                "SELECT 1 FROM share_events WHERE share_token = ? AND visitor_hash = ? "
+                "AND event_type = ? AND track_ref = ? AND ts > ? LIMIT 1",
+                (share_token, vhash, event_type, track_ref, window),
+            ).fetchone()
+        if dup:
+            return False
+
+        conn.execute(
+            "INSERT INTO share_events (share_token, event_type, ts, visitor_hash, track_ref, "
+            "track_title, device, referrer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (share_token, event_type, now.isoformat(), vhash, track_ref,
+             (track_title or None) and track_title[:200], device, referrer or None),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def get_share_activity(share_token):
+    """Everything the host Activity panel needs for one share. All counts
+    come from share_events; a share with no events returns zeros."""
+    conn = get_db()
+    try:
+        ev = lambda t: conn.execute(
+            "SELECT COUNT(*) FROM share_events WHERE share_token = ? AND event_type = ?",
+            (share_token, t),
+        ).fetchone()[0]
+        opens = ev("open")
+        plays_started = ev("play_start")
+        plays_completed = ev("play_complete")
+
+        row = conn.execute(
+            "SELECT COUNT(DISTINCT visitor_hash), MIN(ts), MAX(ts) FROM share_events "
+            "WHERE share_token = ? AND event_type = 'open'",
+            (share_token,),
+        ).fetchone()
+        unique_visitors, first_open, last_open = row[0], row[1], row[2]
+
+        listeners = conn.execute(
+            "SELECT COUNT(DISTINCT visitor_hash) FROM share_events "
+            "WHERE share_token = ? AND event_type IN ('play_start', 'play_complete')",
+            (share_token,),
+        ).fetchone()[0]
+
+        per_track = [
+            dict(r) for r in conn.execute(
+                "SELECT track_ref, MAX(track_title) AS title, "
+                "SUM(event_type = 'play_start') AS started, "
+                "SUM(event_type = 'play_complete') AS completed "
+                "FROM share_events WHERE share_token = ? AND track_ref IS NOT NULL "
+                "GROUP BY track_ref ORDER BY started DESC",
+                (share_token,),
+            )
+        ]
+        devices = {
+            r[0] or "other": r[1] for r in conn.execute(
+                "SELECT device, COUNT(*) FROM share_events "
+                "WHERE share_token = ? AND event_type = 'open' GROUP BY device",
+                (share_token,),
+            )
+        }
+        referrers = {
+            (r[0] or "direct"): r[1] for r in conn.execute(
+                "SELECT referrer, COUNT(*) FROM share_events "
+                "WHERE share_token = ? AND event_type = 'open' GROUP BY referrer "
+                "ORDER BY COUNT(*) DESC",
+                (share_token,),
+            )
+        }
+        # Hourly buckets (UTC, 'YYYY-MM-DDTHH'), for a sparkline.
+        timeline = [
+            {"hour": r[0], "opens": r[1], "plays": r[2]} for r in conn.execute(
+                "SELECT substr(ts, 1, 13), "
+                "SUM(event_type = 'open'), SUM(event_type = 'play_start') "
+                "FROM share_events WHERE share_token = ? GROUP BY substr(ts, 1, 13) "
+                "ORDER BY 1",
+                (share_token,),
+            )
+        ]
+        return {
+            "opens": opens,
+            "unique_visitors": unique_visitors,
+            "listeners": listeners,
+            "plays_started": plays_started,
+            "plays_completed": plays_completed,
+            "first_open": first_open,
+            "last_open": last_open,
+            "per_track": per_track,
+            "devices": devices,
+            "referrers": referrers,
+            "timeline": timeline,
+        }
+    finally:
+        conn.close()
+
+
+def get_share_activity_summaries(tokens):
+    """{token: {opens, unique_visitors, listeners, plays_started,
+    plays_completed}} for many shares in one query -- the stats table
+    uses this instead of one query per row."""
+    tokens = list(tokens)
+    if not tokens:
+        return {}
+    out = {t: {"opens": 0, "unique_visitors": 0, "listeners": 0,
+               "plays_started": 0, "plays_completed": 0} for t in tokens}
+    conn = get_db()
+    try:
+        for i in range(0, len(tokens), 400):          # stay under SQLite's variable limit
+            chunk = tokens[i:i + 400]
+            marks = ",".join("?" * len(chunk))
+            for r in conn.execute(
+                "SELECT share_token, "
+                "SUM(event_type = 'open'), "
+                "COUNT(DISTINCT CASE WHEN event_type = 'open' THEN visitor_hash END), "
+                "COUNT(DISTINCT CASE WHEN event_type IN ('play_start', 'play_complete') THEN visitor_hash END), "
+                "SUM(event_type = 'play_start'), SUM(event_type = 'play_complete') "
+                f"FROM share_events WHERE share_token IN ({marks}) GROUP BY share_token",
+                chunk,
+            ):
+                out[r[0]] = {"opens": r[1] or 0, "unique_visitors": r[2] or 0,
+                             "listeners": r[3] or 0, "plays_started": r[4] or 0,
+                             "plays_completed": r[5] or 0}
+    finally:
+        conn.close()
+    return out
+
+
+def archive_finished_shares():
+    """'Clear expired/revoked' -- hides finished links from the default
+    list but keeps the share row and ALL of its activity. Live links are
+    never touched. Returns how many were archived."""
+    now = _now()
+    conn = get_db()
+    cur = conn.execute(
+        "UPDATE shares SET archived_at = ? WHERE archived_at IS NULL "
+        "AND (revoked = 1 OR expires_at <= ?)",
+        (now, now),
+    )
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return n
+
+
+def set_share_archived(token, archived):
+    conn = get_db()
+    conn.execute(
+        "UPDATE shares SET archived_at = ? WHERE share_token = ?",
+        (_now() if archived else None, token),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_share_permanently(token):
+    """The only path that destroys share history. Refuses a live link
+    (end it first). Returns True if something was deleted."""
+    if is_share_live(token):
+        return False
+    conn = get_db()
+    conn.execute("DELETE FROM share_events WHERE share_token = ?", (token,))
+    cur = conn.execute("DELETE FROM shares WHERE share_token = ?", (token,))
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return n > 0
+
+
+def prune_share_events(days=None):
+    """Optional retention. Does nothing unless a positive number of days
+    is passed or SHARE_EVENT_RETENTION_DAYS is set -- history is kept
+    forever by default. Returns rows deleted."""
+    days = _retention_days() if days is None else days
+    if days <= 0:
+        return 0
+    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    conn = get_db()
+    cur = conn.execute("DELETE FROM share_events WHERE ts < ?", (cutoff,))
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    return n
+
+
 # --- Admin password (DB-backed, seeded once from config.py) ---------------
 #
 # config.ADMIN_PASSWORD only matters on the very first login after this

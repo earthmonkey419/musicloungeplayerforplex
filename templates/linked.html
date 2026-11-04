@@ -51,8 +51,13 @@
   <img id="art-lightbox-img" alt="Album art" style="max-width:min(92vw,900px); max-height:88vh; object-fit:contain; border-radius:12px;">
 </div>
 
+<p class="pl-caption" style="text-align:center; max-width:560px; margin:var(--pl-space-md) auto 0; opacity:.7;">
+  The person who shared this can see when the link is opened and which tracks are played. No account or personal details are collected.
+</p>
+
 <button id="back-to-top" class="pl-back-to-top" style="position:fixed; bottom:24px; right:24px; z-index:10; display:none;" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Back to top">↑ Top</button>
 
+<script src="{{ url_for('static', filename='js/share-activity.js') }}"></script>
 <script>
 const TRACKS = {{ tracks|tojson }};
 const EXPIRES_AT = {{ share["expires_at"]|tojson }};
