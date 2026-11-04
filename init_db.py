@@ -88,6 +88,33 @@ CREATE TABLE IF NOT EXISTS shares (
 """)
 
 # ---------------------------------------------------------------
+# Share activity (one row per event on a share link)
+#
+# event_type: 'open' | 'play_start' | 'play_complete'. Aggregated on
+# read (see db.get_share_activity). visitor_hash is an HMAC of a random
+# per-browser id and the share token -- never an IP or a raw cookie
+# value, and not linkable across different shares. Rows are deleted
+# with their share by the admin cleanup (foreign keys are not enforced
+# on this connection, so the cascade is done explicitly -- see
+# db.delete_events_for_missing_shares) and by db.prune_share_events().
+# ---------------------------------------------------------------
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS share_events (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    share_token   TEXT NOT NULL,
+    event_type    TEXT NOT NULL CHECK (event_type IN ('open', 'play_start', 'play_complete')),
+    ts            TEXT NOT NULL,
+    visitor_hash  TEXT NOT NULL,
+    track_ref     TEXT,
+    device        TEXT,
+    referrer      TEXT,
+    FOREIGN KEY (share_token) REFERENCES shares(share_token) ON DELETE CASCADE
+)
+""")
+c.execute("CREATE INDEX IF NOT EXISTS idx_share_events_token_ts ON share_events (share_token, ts)")
+
+# ---------------------------------------------------------------
 # Password reset tokens -- unchanged
 # ---------------------------------------------------------------
 

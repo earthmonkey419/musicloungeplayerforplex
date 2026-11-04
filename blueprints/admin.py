@@ -220,6 +220,9 @@ def stats_clear():
         conn.execute("DELETE FROM room_sessions WHERE ended_by_admin = 1")
     conn.commit()
     conn.close()
+    if kind == "shares":
+        db.delete_events_for_missing_shares()
+        db.prune_share_events()
     return redirect(url_for("admin.stats"))
 
 

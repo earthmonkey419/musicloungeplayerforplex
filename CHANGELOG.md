@@ -7,6 +7,7 @@ this project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Share-link activity logging (first phase of host-side link activity): each share link now records when it is opened and which tracks are started and finished, with link-preview bots (iMessage, Slack, Facebook, crawlers) filtered out. Visitors are counted with an anonymous per-browser hash, never an IP address, and the recipient page says activity is visible to the host. Events are kept 90 days. Existing installs run `python3 migrate_share_events.py` once (new installs get the table from `init_db.py`). The host-facing Activity panel is the next phase
 - The album name now shows under the artist in the bottom player bar and in the expanded Now Playing view
 - Two new station buttons on the search page: **Library Radio** (random tracks from the whole library) and **Album Radio** (random albums back to back, each in album order). Both are continuous like the other stations and work without MusicMind or Plex sonic analysis
 

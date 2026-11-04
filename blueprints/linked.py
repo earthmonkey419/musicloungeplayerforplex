@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template, current_app
+import secrets
+
+from flask import Blueprint, render_template, current_app, request, session
 
 import db
 import plex_client
@@ -28,7 +30,17 @@ def view_share(share_token):
         tracks = []
 
     media_access.remember_share(share_token, share["content_ref"], tracks)
-    db.record_share_access(share_token)
+
+    # Link-preview fetchers (iMessage, Slack, Facebook...) still get the
+    # page -- they need the og: tags -- but never count as an open.
+    if not db.is_bot_user_agent(request.headers.get("User-Agent", "")):
+        db.record_share_access(share_token)
+        # Random per-browser id, only ever stored hashed with the share
+        # token (db.visitor_hash). Lets the host see unique visitors
+        # without storing IPs.
+        if "vid" not in session:
+            session["vid"] = secrets.token_urlsafe(12)
+        session.permanent = True
 
     return render_template(
         "linked.html",
@@ -39,3 +51,42 @@ def view_share(share_token):
         needs_audio_bar=True,
         hide_bar_ui=True,
     )
+
+
+@bp.route("/<share_token>/event", methods=["POST"])
+def share_event(share_token):
+    """Activity beacon from the recipient's page: 'open', 'play_start' or
+    'play_complete'. Always answers 204 (even when it drops the event) so
+    the client has nothing to retry or learn from. Dropped silently when:
+    the share is dead, this browser never opened the link, the client is
+    a bot, the type is unknown, or a play event names a track that is not
+    part of this share."""
+    if not db.is_share_live(share_token):
+        return "", 404
+    if share_token not in session.get("share_tokens", []):
+        return "", 204
+    ua = request.headers.get("User-Agent", "")
+    if db.is_bot_user_agent(ua) or "vid" not in session:
+        return "", 204
+
+    body = request.get_json(silent=True) or {}
+    event_type = body.get("type")
+    if event_type not in db.SHARE_EVENT_TYPES:
+        return "", 204
+
+    track_ref = None
+    if event_type != "open":
+        track_ref = str(body.get("track_ref") or "")
+        if not track_ref or track_ref not in media_access._share_keys(share_token):
+            return "", 204
+
+    referrer = db.referrer_host(body.get("referrer", "")) if event_type == "open" else None
+    db.record_share_event(
+        share_token,
+        event_type,
+        db.visitor_hash(session["vid"], share_token),
+        track_ref=track_ref,
+        device=db.classify_device(ua),
+        referrer=referrer,
+    )
+    return "", 204
