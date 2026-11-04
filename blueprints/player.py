@@ -417,6 +417,31 @@ def _radio_album_batch(exclude, count=1):
     return out
 
 
+def _radio_spread(tracks):
+    """Reorder a batch so neighbours don't share an artist or album.
+    Keeps the incoming (similarity) order as far as possible: each slot
+    takes the earliest remaining track that differs from the previous one,
+    and falls back to the earliest remaining if none does."""
+    def _k(t, f):
+        v = (t.get(f) or "").strip().lower()
+        return v or None
+    rest = list(tracks or [])
+    out = []
+    prev_art = prev_alb = None
+    while rest:
+        pick = 0
+        for i, t in enumerate(rest):
+            a, b = _k(t, "artist"), _k(t, "album")
+            if (a and a == prev_art) or (b and b == prev_alb):
+                continue
+            pick = i
+            break
+        t = rest.pop(pick)
+        out.append(t)
+        prev_art, prev_alb = _k(t, "artist"), _k(t, "album")
+    return out
+
+
 def _radio_batch(ctx, seeds, exclude, limit):
     """Returns a list of track dicts (possibly empty), or None on engine failure."""
     mode = (ctx or {}).get("mode")
@@ -425,7 +450,10 @@ def _radio_batch(ctx, seeds, exclude, limit):
     if mode == "album":
         return _radio_album_batch(exclude, 1)
     if mode == "sim":
-        return musicmind_bridge.radio_next(seeds, exclude_keys=exclude, limit=limit)
+        div = bool((ctx or {}).get("diverse"))
+        got = musicmind_bridge.radio_next(seeds, exclude_keys=exclude, limit=limit,
+                                          max_per_artist=1 if div else 2, diverse=div)
+        return _radio_spread(got) if got else got
     if mode == "sonic":
         return _radio_sonic_batch(seeds, exclude, limit)
     if mode == "mood":
@@ -492,13 +520,22 @@ def _radio_start_random():
         if picked and picked[1]:
             tag, keys = picked
             first = musicmind_bridge._track_dicts(keys)
-            batch = musicmind_bridge.radio_next(keys, exclude_keys=keys, limit=RADIO_BATCH) or []
+            _seen, _uniq = set(), []
+            for _t in first:
+                _k = (_t.get("artist") or "").lower()
+                if _k not in _seen:
+                    _seen.add(_k)
+                    _uniq.append(_t)
+            first = _uniq
+            batch = musicmind_bridge.radio_next(keys, exclude_keys=keys, limit=RADIO_BATCH + 3,
+                                                max_per_artist=1, diverse=True) or []
+            batch = [t for t in batch if (t.get("artist") or "").lower() not in _seen][:RADIO_BATCH]
             if first or batch:
                 return jsonify({
-                    "tracks": first + batch,
+                    "tracks": _radio_spread(first + batch),
                     "seeds": [str(k) for k in keys],
                     "label": f"Random Radio: {tag}",
-                    "ctx": {"mode": "sim"},
+                    "ctx": {"mode": "sim", "diverse": True},
                 })
     mood = _radio_random.choice(list(plex_client.MOOD_BUCKETS.keys()))
     tracks = _radio_mood_batch(mood, [], RADIO_BATCH * 2)

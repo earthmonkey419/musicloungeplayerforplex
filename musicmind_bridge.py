@@ -696,7 +696,7 @@ def random_tag_seeds(n=3, min_count=21):
     return tag, [r[0] for r in rows]
 
 
-def radio_next(seed_keys, exclude_keys=(), limit=10, max_per_artist=2, jitter=10.0):
+def radio_next(seed_keys, exclude_keys=(), limit=10, max_per_artist=2, jitter=10.0, diverse=False):
     """Next batch of radio tracks for one or more seed tracks.
 
     Returns a list of Player track dicts (empty if the seeds have no tags or
@@ -779,6 +779,11 @@ def radio_next(seed_keys, exclude_keys=(), limit=10, max_per_artist=2, jitter=10
             score += 3
         scored.append((score + random.uniform(0, jitter), r))
     scored.sort(key=lambda x: -x[0])
+    if diverse:
+        # sample from a wide top band instead of the strict top-N
+        head = scored[:max(limit * 12, 120)]
+        random.shuffle(head)
+        scored = head
 
     results, per_artist = [], {}
     for _, r in scored:
