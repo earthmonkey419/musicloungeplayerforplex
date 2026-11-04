@@ -14,7 +14,7 @@ It also includes two social listening modes, launched right from the player:
 - **Room Mode** — start a shared listening session; guests join by code and add to one shared queue, no accounts needed.
 - **Share Mode** — send a track, album, artist, or playlist as a private, time-limited link.
 
-**Status:** actively developed. Latest release: v2.4.1 — see [`CHANGELOG.md`](CHANGELOG.md) for what shipped and what's coming.
+**Status:** actively developed. Latest release: v2.4.2 — see [`CHANGELOG.md`](CHANGELOG.md) for what shipped and what's coming.
 
 ## Player vs. Jukebox (Lite)
 

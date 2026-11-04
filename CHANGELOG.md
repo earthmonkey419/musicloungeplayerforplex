@@ -6,6 +6,12 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-11-04
+
+### Fixed
+- Radio: stations no longer queue runs of tracks from the same artist or album. Each batch is reordered so neighbouring tracks differ by artist and album, and the opening queue of a Random Radio station is spread the same way
+- Random Radio: stations are far more varied. Candidates are now drawn from a wide band of similar tracks instead of the strict top matches, with at most one track per artist per batch, and the starting tracks no longer repeat an artist. Refills keep the same behaviour. Track and Album Radio still stay tightly similar to the track you started from
+
 ## [2.4.1] - 2026-11-03
 
 ### Fixed
