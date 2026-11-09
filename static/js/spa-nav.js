@@ -65,6 +65,65 @@
     });
   }
 
+  // Swap a fetched page into #spa-content. mode: "push" (new history
+  // entry), "replace" (same entry, used after a form POST so Back doesn't
+  // land on a stale copy), or "none" (popstate). Returns false when the
+  // response isn't a player-family page and a real navigation was started.
+  function applyPage(html, finalUrl, mode, keepScroll) {
+    const target = new URL(finalUrl, window.location.origin);
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const newContent = doc.getElementById("spa-content");
+    if (!newContent) {
+      window.location.href = finalUrl;
+      return false;
+    }
+
+    // Some pages render differently depending on server-side state --
+    // Room's dashboard is player_family (SPA-eligible) only when no
+    // room is active yet; the moment a room exists, it renders as a
+    // real, separate page instead (its own richer Now Playing UI,
+    // server-authoritative audio). #spa-content always exists either
+    // way, so that alone can't distinguish the two -- this data
+    // attribute is the explicit signal. Falling back to a real
+    // navigation here, rather than soft-swapping in a page that
+    // wasn't actually meant for this zone, matches the same safety
+    // principle as the redirected-to-login check above.
+    if (newContent.dataset.playerFamily !== "true") {
+      window.location.href = finalUrl;
+      return false;
+    }
+
+    if (typeof window.__spaTeardown === "function") {
+      try { window.__spaTeardown(); } catch (e) { console.error("SPA teardown error:", e); }
+      window.__spaTeardown = null;
+    }
+
+    // pushState BEFORE swapping content/re-executing scripts: some
+    // pages (browse_index.html) call history.replaceState() as part
+    // of their own top-level script to add query params (?type=&sort=).
+    // If pushState happened AFTER that, it would overwrite the page's
+    // own replaceState with the plain clicked URL, silently dropping
+    // those params from the address bar.
+    if (mode === "push") history.pushState({ spa: true }, "", finalUrl);
+    else if (mode === "replace") history.replaceState({ spa: true }, "", finalUrl);
+
+    const scrollY = window.scrollY;
+    contentEl.innerHTML = newContent.innerHTML;
+    document.title = doc.title;
+    reExecuteScripts(contentEl);
+
+    updateActiveNavLink(target.pathname);
+
+    if (keepScroll) {
+      window.scrollTo(0, scrollY);
+    } else if (target.hash) {
+      focusOrScrollHash(target.hash);
+    } else {
+      window.scrollTo(0, 0);
+    }
+    return true;
+  }
+
   async function navigateTo(url, pushState) {
     const target = new URL(url, window.location.origin);
     let res, html;
@@ -81,53 +140,38 @@
       return;
     }
 
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const newContent = doc.getElementById("spa-content");
-    if (!newContent) {
-      window.location.href = url;
-      return;
-    }
-
-    // Some pages render differently depending on server-side state --
-    // Room's dashboard is player_family (SPA-eligible) only when no
-    // room is active yet; the moment a room exists, it renders as a
-    // real, separate page instead (its own richer Now Playing UI,
-    // server-authoritative audio). #spa-content always exists either
-    // way, so that alone can't distinguish the two -- this data
-    // attribute is the explicit signal. Falling back to a real
-    // navigation here, rather than soft-swapping in a page that
-    // wasn't actually meant for this zone, matches the same safety
-    // principle as the redirected-to-login check above.
-    if (newContent.dataset.playerFamily !== "true") {
-      window.location.href = url;
-      return;
-    }
-
-    if (typeof window.__spaTeardown === "function") {
-      try { window.__spaTeardown(); } catch (e) { console.error("SPA teardown error:", e); }
-      window.__spaTeardown = null;
-    }
-
-    // pushState BEFORE swapping content/re-executing scripts: some
-    // pages (browse_index.html) call history.replaceState() as part
-    // of their own top-level script to add query params (?type=&sort=).
-    // If pushState happened AFTER that, it would overwrite the page's
-    // own replaceState with the plain clicked URL, silently dropping
-    // those params from the address bar.
-    if (pushState) history.pushState({ spa: true }, "", url);
-
-    contentEl.innerHTML = newContent.innerHTML;
-    document.title = doc.title;
-    reExecuteScripts(contentEl);
-
-    updateActiveNavLink(target.pathname);
-
-    if (target.hash) {
-      focusOrScrollHash(target.hash);
-    } else {
-      window.scrollTo(0, 0);
-    }
+    applyPage(html, url, pushState ? "push" : "none", false);
   }
+
+  // Forms marked data-spa-form (POST -> redirect -> page) are submitted with
+  // fetch and the resulting page is swapped in place, so actions like
+  // "End Link" on Settings don't do a full reload that stops playback.
+  async function submitSpaForm(form) {
+    let res, html;
+    try {
+      res = await fetch(form.action, {
+        method: "POST",
+        body: new URLSearchParams(new FormData(form)),
+        headers: { "X-Spa-Nav": "1" },
+        credentials: "same-origin",
+      });
+      html = await res.text();
+    } catch (e) {
+      form.submit();   // programmatic submit skips this handler
+      return;
+    }
+    if (!res.ok) { form.submit(); return; }
+    applyPage(html, res.url, "replace", true);
+  }
+
+  document.addEventListener("submit", (e) => {
+    if (e.defaultPrevented) return;   // confirm() said no
+    const form = e.target;
+    if (!form || form.tagName !== "FORM" || !form.hasAttribute("data-spa-form")) return;
+    if ((form.method || "").toLowerCase() !== "post") return;
+    e.preventDefault();
+    submitSpaForm(form);
+  });
 
   document.addEventListener("click", (e) => {
     if (e.defaultPrevented || e.button !== 0) return;

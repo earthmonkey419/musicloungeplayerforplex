@@ -5,7 +5,7 @@
 {% block content %}
 <div style="display:flex; justify-content:space-between; align-items:center; margin:var(--pl-space-lg) 0 var(--pl-space-md);">
   <h1 style="font-size:32px;">📊 Settings</h1>
-  <a href="{{ url_for('admin.dashboard') }}" class="link-manage" style="margin:0;" data-full-reload>← Dashboard</a>
+  <a href="{{ url_for('player.index') }}" class="link-manage" style="margin:0;">← Back to Player</a>
 </div>
 
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
@@ -40,7 +40,7 @@
       <a href="{{ url_for('admin.stats', archived=('' if show_archived else '1')) }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">{% if show_archived %}Hide archived{% else %}Show archived ({{ archived_count }}){% endif %}</a>
       {% endif %}
       <a href="{{ url_for('admin.stats_download', kind='shares') }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">⬇ Download CSV</a>
-      <form method="post" action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Archive expired and revoked share links? They are hidden from this list but keep all their history (use Show archived to see them). Live links are never affected.');" style="display:inline;">
+      <form method="post" data-spa-form action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Archive expired and revoked share links? They are hidden from this list but keep all their history (use Show archived to see them). Live links are never affected.');" style="display:inline;">
         <input type="hidden" name="kind" value="shares">
         <button type="submit" class="btn-secondary" style="padding:6px 12px; font-size:12px;">📦 Archive expired/revoked</button>
       </form>
@@ -88,19 +88,19 @@
             <button type="button" class="btn-secondary" data-activity="{{ s.share_token }}" aria-expanded="false" style="padding:5px 10px; font-size:11px; margin-right:4px;">📈 Activity</button>
             {% if s.status == "live" %}
             <button type="button" class="btn-secondary" data-copy-share="{{ s.share_token }}" style="padding:5px 10px; font-size:11px; margin-right:4px;">📋 Copy Link</button>
-            <form method="post" action="{{ url_for('admin.stats_revoke_share') }}" onsubmit="return confirm('End this link? It will stop working immediately.');" style="display:inline;">
+            <form method="post" data-spa-form action="{{ url_for('admin.stats_revoke_share') }}" onsubmit="return confirm('End this link? It will stop working immediately.');" style="display:inline;">
               <input type="hidden" name="token" value="{{ s.share_token }}">
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Link</button>
             </form>
             {% else %}
             {% if s.archived_at %}
             <span class="pl-badge pl-badge-neutral" style="margin-right:4px;">ARCHIVED</span>
-            <form method="post" action="{{ url_for('admin.stats_unarchive_share') }}" style="display:inline;">
+            <form method="post" data-spa-form action="{{ url_for('admin.stats_unarchive_share') }}" style="display:inline;">
               <input type="hidden" name="token" value="{{ s.share_token }}">
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px; margin-right:4px;">Restore</button>
             </form>
             {% endif %}
-            <form method="post" action="{{ url_for('admin.stats_delete_share') }}" onsubmit="return confirm('Permanently delete this link AND all of its activity history? This cannot be undone. (Archiving keeps the history.)');" style="display:inline;">
+            <form method="post" data-spa-form action="{{ url_for('admin.stats_delete_share') }}" onsubmit="return confirm('Permanently delete this link AND all of its activity history? This cannot be undone. (Archiving keeps the history.)');" style="display:inline;">
               <input type="hidden" name="token" value="{{ s.share_token }}">
               {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">Delete…</button>
@@ -125,7 +125,7 @@
     <div class="room-card-label" style="margin:0;">ROOM SESSIONS ({{ rooms|length }})</div>
     <div style="display:flex; gap:8px;">
       <a href="{{ url_for('admin.stats_download', kind='rooms') }}" class="btn-secondary" style="padding:6px 12px; font-size:12px;">⬇ Download CSV</a>
-      <form method="post" action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Clear ended room sessions? The current active room, if any, is never affected.');" style="display:inline;">
+      <form method="post" data-spa-form action="{{ url_for('admin.stats_clear') }}" onsubmit="return confirm('Clear ended room sessions? The current active room, if any, is never affected.');" style="display:inline;">
         <input type="hidden" name="kind" value="rooms">
         <button type="submit" class="btn-secondary" style="padding:6px 12px; font-size:12px;">🗑 Clear ended</button>
       </form>
@@ -155,7 +155,7 @@
           </td>
           <td style="padding:8px 6px;">
             {% if not r.ended_by_admin %}
-            <form method="post" action="{{ url_for('admin.stats_end_room') }}" onsubmit="return confirm('End this room for everyone?');" style="display:inline;">
+            <form method="post" data-spa-form action="{{ url_for('admin.stats_end_room') }}" onsubmit="return confirm('End this room for everyone?');" style="display:inline;">
               <input type="hidden" name="session_id" value="{{ r.session_id }}">
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Room</button>
             </form>
@@ -172,6 +172,8 @@
 </div>
 <script>
 (function () {
+  if (window.__mlCopyBound) return;
+  window.__mlCopyBound = true;
   function legacyCopy(text) {
     var ta = document.createElement("textarea");
     ta.value = text;
