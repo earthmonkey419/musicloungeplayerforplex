@@ -128,6 +128,11 @@ def create_app():
             response.headers["Pragma"] = "no-cache"
         return response
 
+    # Keep cached library data in step with Plex/MusicMind (see
+    # library_watch.py; LIBRARY_WATCH_INTERVAL = 0 in config.py disables).
+    import library_watch
+    library_watch.start()
+
     return app
 
 

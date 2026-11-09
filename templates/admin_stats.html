@@ -9,6 +9,37 @@
 </div>
 
 <div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
+  <div class="room-card-label">LIBRARY</div>
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div style="font-size:14px;">
+      {% if library.enabled %}
+      <p style="margin:0 0 4px;">Checking Plex{% if library.musicmind %} and MusicMind{% endif %} for changes every {{ library.interval }}s — new music shows up in Browse{% if library.musicmind %} and Search{% endif %} on its own.</p>
+      {% else %}
+      <p style="margin:0 0 4px;">Automatic change checking is off (<code>LIBRARY_WATCH_INTERVAL = 0</code>). Use the button to refresh.</p>
+      {% endif %}
+      <p style="margin:0; color:var(--pl-text-secondary); font-size:12px;">
+        Last checked: {% if library.last_check %}<time data-epoch="{{ library.last_check|int }}">--</time>{% else %}not yet{% endif %}
+        · Last refresh: {% if library.last_refresh %}<time data-epoch="{{ library.last_refresh|int }}">--</time> ({{ library.last_reason }}){% else %}none since Player started{% endif %}
+        {% if library.rebuilding %}· <strong>Rebuilding lists…</strong> reload in a few seconds{% endif %}
+      </p>
+      {% if library.last_error %}<p style="margin:4px 0 0; color:var(--pl-red); font-size:12px;">{{ library.last_error }}</p>{% endif %}
+      {% if library.musicmind %}<p style="margin:4px 0 0; color:var(--pl-text-secondary); font-size:12px;">Search, moods and track browse also need MusicMind to ingest new tracks from Plex first.</p>{% endif %}
+    </div>
+    <form method="post" data-spa-form action="{{ url_for('admin.stats_refresh_library') }}" style="display:inline;">
+      <button type="submit" class="btn-secondary" style="padding:8px 16px; font-size:13px;">🔄 Refresh library now</button>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+  document.querySelectorAll("time[data-epoch]").forEach(function (el) {
+    var d = new Date(parseInt(el.getAttribute("data-epoch"), 10) * 1000);
+    el.textContent = isNaN(d) ? "--" : d.toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"});
+  });
+})();
+</script>
+
+<div class="pl-card pl-card-surface" style="margin-bottom:var(--pl-space-md);">
   <div class="room-card-label">LAST.FM SCROBBLING</div>
   {% if not lastfm_configured %}
   <p style="color:var(--pl-text-secondary);">

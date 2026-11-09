@@ -45,6 +45,7 @@ _POOLS = {}            # name -> (timestamp, list)
 _LOCKS = {name: threading.Lock() for name in _FETCHERS}
 _STATE_LOCK = threading.Lock()
 _REFRESHING = set()
+_DIRTY = set()          # pools that must be rebuilt again after the current run
 _SORTED = {}           # (name, sort) -> (pool it was built from, sorted list)
 _LETTER_KEYS = {}      # name -> (sorted list, lowercase keys, first non-alpha idx)
 
@@ -91,20 +92,45 @@ def _rebuild(name):
 def _refresh_async(name):
     with _STATE_LOCK:
         if name in _REFRESHING:
+            # A rebuild is already running, possibly from before the
+            # change that triggered this call -- have it go round once
+            # more instead of silently dropping the request.
+            _DIRTY.add(name)
             return
         _REFRESHING.add(name)
 
     def run():
         try:
-            with _LOCKS[name]:
-                _rebuild(name)
-        except Exception:
-            pass  # keep serving the old pool; try again next time it's stale
-        finally:
+            while True:
+                try:
+                    with _LOCKS[name]:
+                        _rebuild(name)
+                except Exception:
+                    pass  # keep serving the old pool; try again next time it's stale
+                with _STATE_LOCK:
+                    if name in _DIRTY:
+                        _DIRTY.discard(name)
+                        continue
+                    _REFRESHING.discard(name)
+                    break
+        except BaseException:
             with _STATE_LOCK:
                 _REFRESHING.discard(name)
+            raise
 
     threading.Thread(target=run, daemon=True).start()
+
+
+def refresh_all():
+    """Rebuild every pool from Plex in the background. The old pools
+    keep serving until each new one is ready, so nobody waits."""
+    for name in _FETCHERS:
+        _refresh_async(name)
+
+
+def is_refreshing():
+    with _STATE_LOCK:
+        return bool(_REFRESHING)
 
 
 def _get_pool(name):

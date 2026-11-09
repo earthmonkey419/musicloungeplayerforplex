@@ -6,6 +6,23 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-09
+
+### Added
+- New music now shows up on its own. Player checks Plex every minute (a few tiny requests: track count, album count and newest album) and, as soon as a scan adds or removes music, rebuilds the Browse artist and album lists in the background and drops its cached search, mood and track-browse results. Previously the lists could take an hour or more to catch up, and needed a second visit after that
+- Player also watches MusicMind's database the same way, so search, moods and track browse pick up new tracks within a minute of a MusicMind ingest finishing. Tag, play-count and analysis updates don't count as a change, so a long-running analysis won't keep clearing caches
+- Settings: a **Library** card with a **Refresh library now** button and a status line (last check, last refresh and why). The button is for changes the automatic check can't see, such as re-tagged items
+- After a restart, Player compares the library with what its saved lists were built from and refreshes them if music changed while it was down
+- `LIBRARY_WATCH_INTERVAL` in `config.py` (seconds, default 60, minimum 15; `0` turns the automatic check off). No migration needed; copy the new setting from `config.example.py` if you want to change it
+
+### Changed
+- Several refresh requests arriving while a rebuild is already running now trigger one more rebuild afterwards instead of being ignored, so a scan that finishes mid-rebuild is not missed
+
+### Fixed
+- Settings: ending a share link (and archiving, restoring, deleting links, ending a room, clearing ended rooms) no longer reloads the whole page, so the playing track keeps playing
+- Settings: the top link is now **← Back to Player** and moves within the app. It used to open the Rooms page (`/admin/dashboard`) with a full page load, which also stopped playback
+- Settings: the Copy Link button no longer fires twice after the page content refreshes in place
+
 ## [2.4.2] - 2026-11-04
 
 ### Fixed

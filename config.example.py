@@ -87,3 +87,10 @@ MUSICMIND_DB_PATH = os.environ.get("MUSICMIND_DB_PATH", "")
 # flow), which stores a permanent session key in the app's own DB.
 LASTFM_API_KEY = os.environ.get("LASTFM_API_KEY", "")
 LASTFM_API_SECRET = os.environ.get("LASTFM_API_SECRET", "")
+
+# --- Library change detection ---
+# How often (seconds) Player checks Plex and MusicMind for new or removed
+# music, refreshing its cached lists as soon as something changes. Each
+# check is a few tiny requests. 0 turns the background check off (the
+# "Refresh library now" button on Settings still works). Minimum is 15.
+LIBRARY_WATCH_INTERVAL = 60

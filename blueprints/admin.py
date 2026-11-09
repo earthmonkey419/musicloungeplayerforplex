@@ -9,6 +9,7 @@ import config
 import db
 import plex_client
 import lastfm_client
+import library_watch
 from auth import admin_required, admin_api_required
 from email_utils import send_password_reset_email
 
@@ -153,6 +154,7 @@ def stats():
         lastfm_authorized=lastfm_client.is_authorized(),
         lastfm_username=lastfm_client.get_connected_username(),
         lastfm_active=lastfm_client.is_configured() and lastfm_client.is_authorized(),
+        library=library_watch.status(),
         player_family=True,
     )
 
@@ -276,6 +278,13 @@ def stats_activity(token):
         "legacy_opens": share["access_count"],
         "activity": data,
     })
+
+
+@bp.route("/stats/refresh-library", methods=["POST"])
+@admin_required
+def stats_refresh_library():
+    library_watch.refresh_now()
+    return redirect(url_for("admin.stats"))
 
 
 @bp.route("/stats/end-room", methods=["POST"])

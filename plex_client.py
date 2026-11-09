@@ -461,6 +461,11 @@ def _norm_name(s):
     return " ".join((s or "").lower().replace(".", "").split())
 
 
+def clear_artist_cache():
+    """Forget the cached artist list so the next search refetches it."""
+    _ARTIST_CACHE["rows"] = None
+
+
 def _cached_artists():
     now = _time.time()
     if _ARTIST_CACHE["rows"] is None or now - _ARTIST_CACHE["at"] > _ARTIST_CACHE_TTL:

@@ -37,6 +37,12 @@ def cache_get(key):
     return results
 
 
+def clear():
+    """Drop every cached pool (search, mood, track browse). Used when
+    the library changes so nothing stale outlives the change."""
+    _RESULT_CACHE.clear()
+
+
 def _evict_stale():
     now = time.time()
     stale = [k for k, (ts, _, ttl) in list(_RESULT_CACHE.items()) if now - ts > ttl]
