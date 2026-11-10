@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-10
+
 ### Added
 - Share links can be renewed: every live or expired link in Settings now has an **Extend** / **Renew** control with the same durations used to create links. The link keeps its URL and all of its activity history, comes back out of the archive if it was archived, and never ends up with less time than it had. Links you ended (**End Link**) stay ended; create a new one instead
 - Expired share links now show a friendly page (instead of a bare "not found") that names what was shared and who sent it, with an **Ask for a new link** button. Tapping it flags the link for you: it shows **ASKED FOR MORE TIME** in Settings until you renew it. The recipient sends no message and no details. This page only appears for links that expired on their own within the last 30 days; ended, unknown and long-expired links still get the plain not-found page, and the page answers 410 instead of 404 for an expired link
