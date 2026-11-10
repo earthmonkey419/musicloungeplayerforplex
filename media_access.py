@@ -15,6 +15,12 @@ proxy. Access is now limited to:
     public, because share emails and link previews fetch it with no
     session.
 
+One deliberate softening: when a share expires mid-listen, a track the
+browser had already started streaming may finish (and be seeked) for
+SHARE_EXPIRY_GRACE_MINUTES after expiry, so a song never cuts off halfway.
+No track the browser hadn't already requested can start, and a link the
+host ENDS has no grace at all.
+
 This is access control, not DRM: someone who can play a track can always
 capture it. What it removes is anonymous library access and casual
 "navigate to the URL and save" downloads.
@@ -28,6 +34,8 @@ import db
 import plex_client
 
 _GRANTS_KEY = "share_tokens"
+_PLAYING_KEY = "share_playing"   # [[token, rating_key], ...]: tracks this browser recently streamed from a live share
+_MAX_PLAYING = 3
 _MAX_GRANTS = 5            # session cookie is small; keep the newest few
 _KEYS_TTL = 600            # seconds a share's track list is trusted
 _keys_cache = {}           # token -> (timestamp, frozenset of rating keys)
@@ -80,12 +88,39 @@ def _share_keys(token):
     return keys
 
 
-def _granted_share_allows(rating_key):
+def _remember_playing(token, key):
+    """Note the tracks this browser has streamed from a live share, so the
+    grace window knows what may finish. Keeps the last few (the track
+    playing plus the one the gapless engine preloads behind it). Written
+    only when it changes, so range requests on one track don't re-issue the
+    session cookie."""
+    pair = [token, key]
+    playing = [p for p in session.get(_PLAYING_KEY, []) if isinstance(p, list) and len(p) == 2]
+    if pair in playing:
+        return
+    playing.append(pair)
+    session[_PLAYING_KEY] = playing[-_MAX_PLAYING:]
+
+
+def _in_progress_track_allows(key):
+    """Grace: an expired (never revoked) share still lets a track this
+    browser had already started streaming finish."""
+    for token, playing_key in (p for p in session.get(_PLAYING_KEY, []) if isinstance(p, list) and len(p) == 2):
+        if playing_key != key or token not in session.get(_GRANTS_KEY, []):
+            continue
+        if db.is_share_in_grace(token) and key in _share_keys(token):
+            return True
+    return False
+
+
+def _granted_share_allows(rating_key, streaming=False):
     key = str(rating_key)
     for token in session.get(_GRANTS_KEY, []):
         if db.is_share_live(token) and key in _share_keys(token):
+            if streaming:
+                _remember_playing(token, key)
             return True
-    return False
+    return _in_progress_track_allows(key)
 
 
 def can_view_art(rating_key):
@@ -101,4 +136,4 @@ def can_stream(rating_key):
         return True
     if request.headers.get("Sec-Fetch-Dest", "").lower() in _NAVIGATION_DESTS:
         return False
-    return _granted_share_allows(rating_key)
+    return _granted_share_allows(rating_key, streaming=True)

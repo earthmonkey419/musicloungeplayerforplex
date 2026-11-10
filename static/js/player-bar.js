@@ -79,6 +79,9 @@ window.MLPlayer = (function () {
   // script must never take MLPlayer -- and with it every page -- down.
   // ---------------------------------------------------------------
   let upNext = null;          // Room Mode: track the SERVER says plays next (see setUpNext)
+  // /linked only: once a share link expires, let the current track finish
+  // but go no further (no preload, no auto-advance). See setStopAfterCurrent.
+  let stopAfterCurrent = false;
   let pendingBlocked = null;  // Room Mode: current attemptAutoplay's onBlocked callback
 
   function peekNextIndex() {
@@ -102,6 +105,7 @@ window.MLPlayer = (function () {
   }
 
   function peekNextRef() {
+    if (stopAfterCurrent) return null;   // nothing preloads, so nothing hands off early
     const i = peekNextIndex();
     if (i !== -1 && queue[i]) return queue[i].rating_key;
     return upNext ? upNext.rating_key : null;
@@ -127,6 +131,11 @@ window.MLPlayer = (function () {
       refresh: () => {},
     };
   })();
+
+  function setStopAfterCurrent(on) {
+    stopAfterCurrent = !!on;
+    gapless.refresh();
+  }
 
   function setUpNext(track) {
     // Room Mode: the dashboard tells the engine which track the server
@@ -575,7 +584,13 @@ window.MLPlayer = (function () {
     // with the bar hidden (/linked, Room Mode) shuffle keeps looping as before.
     const repeatAvailable = !nowPlayingBar.classList.contains("now-playing-bar-page-hidden");
     const atEnd = shuffleOn ? (repeatAvailable && shuffleOrder.length === 0) : queueIndex >= queue.length - 1;
-    if (repEnd !== "off" || !atEnd) {
+    if (stopAfterCurrent) {
+      // Share link expired mid-track: this was the last one. Same end-state
+      // as running off the end of the queue.
+      npPlayPause.classList.remove("is-playing");
+      updateMediaSessionPlaybackState();
+      notifyChange();
+    } else if (repEnd !== "off" || !atEnd) {
       goNext(true);
     } else {
       npPlayPause.classList.remove("is-playing");
@@ -663,6 +678,6 @@ window.MLPlayer = (function () {
     getCurrent, getQueue, getDisplayOrder, rehydrate, setShuffle, isShuffleOn: () => shuffleOn,
     getRepeat: () => repeatMode, setRepeat, cycleRepeat,
     jumpTo, removeFromQueue, reorderQueue, clearQueue,
-    onChange, onEnded, onTimeUpdate, attemptAutoplay, setUpNext,
+    onChange, onEnded, onTimeUpdate, attemptAutoplay, setUpNext, setStopAfterCurrent,
   };
 })();

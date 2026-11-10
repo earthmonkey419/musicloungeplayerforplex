@@ -69,8 +69,8 @@
           <td style="padding:8px 6px;">{{ s.content_title or "--" }}{% if s.content_artist %}<br><span style="color:var(--pl-text-secondary); font-size:12px;">{{ s.content_artist }}</span>{% endif %}</td>
           <td style="padding:8px 6px;">{{ s.content_type }}</td>
           <td style="padding:8px 6px;">
-            {% if s.status == "live" %}<span class="pl-badge pl-badge-live">LIVE</span>
-            {% elif s.status == "expired" %}<span class="pl-badge pl-badge-neutral">EXPIRED</span>
+            {% if s.status == "live" %}<span class="pl-badge pl-badge-live">LIVE</span>{% if s.expiring_soon %}<br><span class="pl-badge pl-badge-neutral" style="margin-top:4px;">EXPIRING SOON</span>{% endif %}
+            {% elif s.status == "expired" %}<span class="pl-badge pl-badge-neutral">EXPIRED</span>{% if s.renewal_requested %}<br><span class="pl-badge pl-badge-live" style="margin-top:4px;" title="The recipient tapped 'Ask for a new link' on the expired page">🔔 ASKED FOR MORE TIME</span>{% endif %}
             {% else %}<span class="pl-badge pl-badge-revoked">REVOKED</span>{% endif %}
           </td>
           {% set a = s.activity %}
@@ -87,12 +87,32 @@
           <td style="padding:8px 6px; white-space:nowrap;">
             <button type="button" class="btn-secondary" data-activity="{{ s.share_token }}" aria-expanded="false" style="padding:5px 10px; font-size:11px; margin-right:4px;">📈 Activity</button>
             {% if s.status == "live" %}
+            {% if s.can_renew %}
+            <form method="post" data-spa-form action="{{ url_for('admin.stats_renew_share') }}" style="display:inline-flex; gap:4px; align-items:center; margin-right:4px;">
+              <input type="hidden" name="token" value="{{ s.share_token }}">
+              {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
+              <select name="hours" aria-label="Extend this link by" class="pl-text-input" style="padding:4px 6px; font-size:11px; width:auto;">
+                {% for h in renew_durations %}<option value="{{ h }}">{{ h }} hrs</option>{% endfor %}
+              </select>
+              <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">{{ "Renew" if s.status == "expired" else "Extend" }}</button>
+            </form>
+            {% endif %}
             <button type="button" class="btn-secondary" data-copy-share="{{ s.share_token }}" style="padding:5px 10px; font-size:11px; margin-right:4px;">📋 Copy Link</button>
             <form method="post" data-spa-form action="{{ url_for('admin.stats_revoke_share') }}" onsubmit="return confirm('End this link? It will stop working immediately.');" style="display:inline;">
               <input type="hidden" name="token" value="{{ s.share_token }}">
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">End Link</button>
             </form>
             {% else %}
+            {% if s.can_renew %}
+            <form method="post" data-spa-form action="{{ url_for('admin.stats_renew_share') }}" style="display:inline-flex; gap:4px; align-items:center; margin-right:4px;">
+              <input type="hidden" name="token" value="{{ s.share_token }}">
+              {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
+              <select name="hours" aria-label="Extend this link by" class="pl-text-input" style="padding:4px 6px; font-size:11px; width:auto;">
+                {% for h in renew_durations %}<option value="{{ h }}">{{ h }} hrs</option>{% endfor %}
+              </select>
+              <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">{{ "Renew" if s.status == "expired" else "Extend" }}</button>
+            </form>
+            {% endif %}
             {% if s.archived_at %}
             <span class="pl-badge pl-badge-neutral" style="margin-right:4px;">ARCHIVED</span>
             <form method="post" data-spa-form action="{{ url_for('admin.stats_unarchive_share') }}" style="display:inline;">

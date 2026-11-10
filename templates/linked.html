@@ -11,7 +11,9 @@
 {% endblock %}
 {% block content %}
 <div style="display:flex; justify-content:flex-end; margin:var(--pl-space-md) 0;">
-  <span id="countdown" class="pl-caption" style="background:var(--pl-surface); padding:6px 12px; border-radius:999px; border:1px solid var(--pl-border);">expires soon</span>
+  <span id="countdown" class="pl-caption" style="background:var(--pl-surface); padding:6px 12px; border-radius:999px; border:1px solid var(--pl-border);"
+        data-expires-at="{{ share['expires_at'] }}" data-server-now="{{ server_now }}" data-grace-seconds="{{ grace_seconds }}"
+        data-renew-url="{{ url_for('linked.request_renewal', share_token=share['share_token']) }}">expires soon</span>
 </div>
 
 <div class="pl-card pl-card-surface" style="text-align:center; max-width:560px; margin:0 auto;">
@@ -58,9 +60,9 @@
 <button id="back-to-top" class="pl-back-to-top" style="position:fixed; bottom:24px; right:24px; z-index:10; display:none;" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Back to top">↑ Top</button>
 
 <script src="{{ url_for('static', filename='js/share-activity.js') }}"></script>
+<script src="{{ url_for('static', filename='js/share-expiry.js') }}"></script>
 <script>
 const TRACKS = {{ tracks|tojson }};
-const EXPIRES_AT = {{ share["expires_at"]|tojson }};
 let currentArtKey = {{ share["content_ref"]|tojson }};
 
 function openArt() {
@@ -117,23 +119,6 @@ MLPlayer.onChange(({ track, index, isPaused }) => {
     if (typeof index === "number") highlightRow(index);
   }
 });
-
-function updateCountdown() {
-  const expires = new Date(EXPIRES_AT + "Z").getTime();
-  const now = Date.now();
-  const diff = expires - now;
-  const el = document.getElementById("countdown");
-  if (diff <= 0) {
-    el.textContent = "expired";
-    return;
-  }
-  const h = Math.floor(diff / 3600000);
-  const m = Math.floor((diff % 3600000) / 60000);
-  const s = Math.floor((diff % 60000) / 1000);
-  el.textContent = `expires in ${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-}
-updateCountdown();
-setInterval(updateCountdown, 1000);
 
 window.addEventListener("scroll", () => {
   document.getElementById("back-to-top").style.display = window.scrollY > 300 ? "flex" : "none";

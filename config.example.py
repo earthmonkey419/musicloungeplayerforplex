@@ -62,6 +62,11 @@ SHARE_TOKEN_BYTES = _int("SHARE_TOKEN_BYTES", 32)
 # Share-link activity history is kept indefinitely by default. Set a
 # number of days to delete older raw activity events (0 = keep forever).
 SHARE_EVENT_RETENTION_DAYS = _int("SHARE_EVENT_RETENTION_DAYS", 0)
+# After a share link expires, the one track a recipient was already
+# listening to may finish (and be seeked) for this many minutes; no new
+# track can start. 0 = cut off at the instant of expiry. Links you End
+# are always cut off immediately.
+SHARE_EXPIRY_GRACE_MINUTES = _int("SHARE_EXPIRY_GRACE_MINUTES", 10)
 
 # --- SMTP (Share Mode "Email It") ---
 SMTP_HOST = os.environ.get("SMTP_HOST", "REPLACE_ME")

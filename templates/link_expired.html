@@ -6,9 +6,47 @@
 <div class="pl-card pl-card-surface" style="max-width:480px; margin:80px auto; text-align:center;">
   <div style="font-size:40px;">🎟️</div>
   <h2 style="margin:8px 0 4px;">This link has expired.</h2>
+  {% if share %}
+  <p style="margin:0 0 4px; font-weight:700;">{{ share["content_title"] }}</p>
+  {% if share["content_artist"] %}<p class="pl-caption" style="margin:0 0 12px;">{{ share["content_artist"] }}</p>{% endif %}
+  <p style="color:var(--pl-text-secondary); margin-bottom:{{ '16px' if can_ask else '0' }};">
+    {% if shared_by %}{{ shared_by }} shared this with you, but share{% else %}Share{% endif %}
+    links are only good for a little while.
+    {% if can_ask %}If you'd like more time, you can let {{ shared_by or "the person who sent it" }} know and they can reopen it.{% else %}Ask {{ shared_by or "whoever sent this one" }} for a fresh link.{% endif %}
+  </p>
+  {% if can_ask %}
+  <button id="ask-btn" class="pl-btn pl-btn-primary" {% if already_asked %}disabled{% endif %}>{% if already_asked %}Request sent{% else %}Ask for a new link{% endif %}</button>
+  <p id="ask-status" class="pl-caption" role="status" style="margin:10px 0 0; min-height:1.2em;">{% if already_asked %}They've been notified. Check back on this same link later.{% endif %}</p>
+  {% endif %}
+  {% else %}
   <p style="color:var(--pl-text-secondary); margin-bottom:0;">
     Share links are only good for a little while. Ask whoever sent
     this one for a fresh link.
   </p>
+  {% endif %}
 </div>
+{% if share and can_ask %}
+<script>
+(function () {
+  var btn = document.getElementById("ask-btn");
+  var status = document.getElementById("ask-status");
+  if (!btn || btn.disabled) return;
+  btn.addEventListener("click", function () {
+    btn.disabled = true;
+    status.textContent = "Sending…";
+    fetch({{ url_for('linked.request_renewal', share_token=token)|tojson }}, {
+      method: "POST",
+      credentials: "same-origin",
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      btn.textContent = "Request sent";
+      status.textContent = "They've been notified. Check back on this same link later.";
+    }).catch(function () {
+      btn.disabled = false;
+      status.textContent = "Couldn't send that right now. Try again in a moment.";
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

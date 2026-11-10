@@ -84,7 +84,10 @@ CREATE TABLE IF NOT EXISTS shares (
     revoked           INTEGER DEFAULT 0,
     access_count      INTEGER DEFAULT 0,
     last_accessed_at  TEXT,
-    archived_at       TEXT
+    archived_at       TEXT,
+    renewed_at        TEXT,
+    renew_count       INTEGER DEFAULT 0,
+    renewal_requested_at TEXT
 )
 """)
 

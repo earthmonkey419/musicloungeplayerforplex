@@ -146,7 +146,7 @@ Devices, and give each of your apps its own token. (Plex's
 
 This is a single-admin, browser-based tool — there's no multi-user account system, by design. Anyone with the admin password has full access; anyone with a Room join code or Share link gets the scoped, guest-facing experience for that session only. Starting a Room and creating Share links both require the admin login. Recipients and Room guests don't log in.
 
-Audio and cover art go through the app's own proxy, so your real Plex token never reaches a browser. `/stream/<id>` and `/art/<id>` don't answer anonymous requests: audio is limited to the admin and to tracks in a share link that browser has opened (checked against the live link on every request, so expiry and "End this link" cut it off immediately), and direct navigation to a stream URL is refused. This is access control, not DRM.
+Audio and cover art go through the app's own proxy, so your real Plex token never reaches a browser. `/stream/<id>` and `/art/<id>` don't answer anonymous requests: audio is limited to the admin and to tracks in a share link that browser has opened (checked against the live link on every request, so "End this link" cuts it off immediately, and expiry does too, except that a track a listener had already started may finish for a few minutes, `SHARE_EXPIRY_GRACE_MINUTES`, so a song never stops halfway), and direct navigation to a stream URL is refused. This is access control, not DRM.
 
 ## Known limitations
 
