@@ -6,6 +6,9 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Share pages show album information. A link to a single album (or to two or more tracks that all come from one album) gets an album header with the cover, title, artist, year, track count, runtime, genres and label when Plex has them, plus a collapsible **About this album** blurb when Plex has a summary; a partial selection reads "5 of 12 tracks". The artist is shown once in the header instead of on every row, except where a track's artist differs (compilations). Playlists and mixed shares keep the playlist layout, with the album and year shown under each track. Fields Plex doesn't have are simply left out
+
 ## [2.6.0] - 2026-11-10
 
 ### Added

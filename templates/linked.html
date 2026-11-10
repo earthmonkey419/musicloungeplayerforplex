@@ -18,8 +18,31 @@
 
 <div class="pl-card pl-card-surface" style="text-align:center; max-width:560px; margin:0 auto;">
   <img id="hero-art" src="/art/{{ share['content_ref'] }}" onerror="this.style.opacity=0" onclick="openArt()" title="Tap to enlarge" style="cursor:zoom-in; width:220px; height:220px; border-radius:var(--pl-radius-md); object-fit:cover; margin-bottom:var(--pl-space-md);">
+  {% if album_info %}
+  {% set mins = (album_info.runtime_sec // 60) %}
+  {% set bits = [] %}
+  {% if album_info.year %}{% set _ = bits.append(album_info.year|string) %}{% endif %}
+  {% if album_info.is_partial %}{% set _ = bits.append(album_info.shared_tracks ~ " of " ~ album_info.total_tracks ~ " tracks") %}
+  {% else %}{% set _ = bits.append(album_info.shared_tracks ~ (" track" if album_info.shared_tracks == 1 else " tracks")) %}{% endif %}
+  {% if mins >= 60 %}{% set _ = bits.append((mins // 60) ~ " hr " ~ (mins % 60) ~ " min") %}
+  {% elif mins > 0 %}{% set _ = bits.append(mins ~ " min") %}{% endif %}
+  <h2 style="font-size:24px; margin:0;">{{ album_info.title }}</h2>
+  {% if album_info.artist %}<p style="color:var(--pl-text-secondary); margin:4px 0 0;">{{ album_info.artist }}</p>{% endif %}
+  <p class="pl-caption" style="margin:6px 0 0;">{{ bits|join(" · ") }}</p>
+  {% if album_info.genres or album_info.label %}
+  <p class="pl-caption" style="margin:2px 0 0; opacity:.85;">{{ (album_info.genres + ([album_info.label] if album_info.label else []))|join(" · ") }}</p>
+  {% endif %}
+  {% if album_info.summary %}
+  <details style="text-align:left; margin:var(--pl-space-md) 0 0;">
+    <summary class="pl-caption" style="cursor:pointer; text-align:center;">About this album</summary>
+    <p class="pl-caption" style="margin:8px 0 0; line-height:1.5; white-space:pre-line;">{{ album_info.summary }}</p>
+  </details>
+  {% endif %}
+  <div style="height:var(--pl-space-md);"></div>
+  {% else %}
   <h2 style="font-size:24px; margin:0;">{{ content_title }}</h2>
   {% if content_artist %}<p style="color:var(--pl-text-secondary); margin:4px 0 var(--pl-space-md);">{{ content_artist }}</p>{% endif %}
+  {% endif %}
 
   <div id="sharee-np" style="display:none; margin:0 0 var(--pl-space-md);">
     <div id="sharee-np-label" class="pl-caption" style="text-transform:uppercase; letter-spacing:.08em; font-size:11px;">Now playing</div>
@@ -39,7 +62,13 @@
     <li class="track-row" style="cursor:pointer;" onclick="playTrackAt({{ loop.index0 }})" id="track-row-{{ loop.index0 }}">
       <div class="track-meta">
         <div class="track-title">{{ loop.index }}. {{ t["title"] }}</div>
+        {% if album_info %}
+        {# Album header already names the artist; only repeat it when a track's artist differs (compilations). #}
+        {% if t["artist"] != album_info.artist %}<div class="pl-caption">{{ t["artist"] }}</div>{% endif %}
+        {% else %}
         <div class="pl-caption">{{ t["artist"] }}</div>
+        {% if t["album"] %}<div class="pl-caption" style="opacity:.7;">{{ t["album"] }}{% if t["album_year"] %} · {{ t["album_year"] }}{% endif %}</div>{% endif %}
+        {% endif %}
       </div>
       <div class="pl-caption">{{ "%d:%02d"|format(t["duration_sec"] // 60, t["duration_sec"] % 60) }}</div>
     </li>
