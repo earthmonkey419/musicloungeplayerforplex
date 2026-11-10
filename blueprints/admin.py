@@ -3,7 +3,7 @@ import io
 from urllib.parse import urlparse
 import csv
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import qrcode
 import config
 import db
@@ -14,6 +14,8 @@ from auth import admin_required, admin_api_required
 from email_utils import send_password_reset_email
 
 bp = Blueprint("admin", __name__)
+
+_EXPIRING_SOON_HOURS = 6    # live links closer to expiry than this get an "expiring soon" badge
 
 
 SHARE_CSV_COLUMNS = [
@@ -117,6 +119,7 @@ def reset_password(token):
 def stats():
     conn = db.get_db()
     now = datetime.utcnow().isoformat()
+    soon = (datetime.utcnow() + timedelta(hours=_EXPIRING_SOON_HOURS)).isoformat()
 
     show_archived = request.args.get("archived") == "1"
     archived_count = conn.execute(
@@ -137,6 +140,9 @@ def stats():
             d["status"] = "expired"
         else:
             d["status"] = "live"
+        d["expiring_soon"] = d["status"] == "live" and d["expires_at"] <= soon
+        d["renewal_requested"] = bool(d.get("renewal_requested_at"))   # absent until migrate_share_renew.py has run
+        d["can_renew"] = d["status"] != "revoked" and "renewal_requested_at" in d
         shares.append(d)
 
     rooms = conn.execute(
@@ -147,6 +153,7 @@ def stats():
     return render_template(
         "admin_stats.html",
         shares=shares,
+        renew_durations=config.SHARE_LINK_DURATIONS_HOURS,
         show_archived=show_archived,
         archived_count=archived_count,
         rooms=rooms,
@@ -275,6 +282,7 @@ def stats_activity(token):
         "artist": share["content_artist"],
         "created_at": share["created_at"],
         "expires_at": share["expires_at"],
+        "renew_count": share["renew_count"] if "renew_count" in share.keys() else 0,
         "legacy_opens": share["access_count"],
         "activity": data,
     })
@@ -294,6 +302,22 @@ def stats_end_room():
     if session_id:
         db.end_room(session_id)
     return redirect(url_for("admin.stats"))
+
+
+@bp.route("/stats/renew-share", methods=["POST"])
+@admin_required
+def stats_renew_share():
+    """Give a live or expired link more time (same URL, same history).
+    Only the configured durations are accepted, so every link keeps a
+    real expiry; ended (revoked) links can't be renewed."""
+    token = request.form.get("token")
+    try:
+        hours = int(request.form.get("hours", ""))
+    except ValueError:
+        hours = 0
+    if token and hours in config.SHARE_LINK_DURATIONS_HOURS:
+        db.renew_share(token, hours)
+    return redirect(url_for("admin.stats", archived="1" if request.form.get("archived") == "1" else None))
 
 
 @bp.route("/stats/revoke-share", methods=["POST"])

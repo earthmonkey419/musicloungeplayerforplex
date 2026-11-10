@@ -89,7 +89,8 @@ def create_share():
     if content_type not in ("album", "artist", "playlist", "track"):
         return jsonify({"error": "Pick what you're sharing first."}), 400
     if duration not in config.SHARE_LINK_DURATIONS_HOURS:
-        return jsonify({"error": "Pick a valid duration (24/48/72 hours)."}), 400
+        allowed = "/".join(str(h) for h in config.SHARE_LINK_DURATIONS_HOURS)
+        return jsonify({"error": f"Pick a valid duration ({allowed} hours)."}), 400
     if not content_ref:
         return jsonify({"error": "Pick something to share first."}), 400
 

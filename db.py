@@ -293,7 +293,7 @@ def log_action(session_id, action_type, detail=""):
 
 def create_share(content_type, content_ref, content_title, content_artist, duration_hours):
     """Mints a share as a DB row -- long random token, expiry set at
-    creation time from the fixed 24/48/72hr set. Per the scope doc:
+    creation time from the configured set of durations. Per the scope doc:
     a DB row rather than a signed token, because it's free (same
     pattern as room_sessions) and keeps revocation possible."""
     token = secrets.token_urlsafe(config.SHARE_TOKEN_BYTES)
@@ -353,6 +353,115 @@ def has_live_share_for_ref(content_ref):
     ).fetchone()
     conn.close()
     return row is not None
+
+
+# --- Share expiry: grace, renewal, and the expired page --------------------
+#
+# Every share link always has an expiry; nothing here can make one
+# permanent. Renewing never pushes the end further than "now + one of the
+# configured durations", so a link can be kept going but only ever in
+# short, deliberate steps by the host.
+
+_EXPIRED_PAGE_DAYS = 30      # how long after expiry the friendly page still names the share
+
+
+def share_grace_seconds():
+    """How long past expiry the ONE track a visitor was already streaming may
+    finish (seek/range requests included). New tracks never start. 0 = no
+    grace. Read lazily so an older config.py without the setting works."""
+    return max(0, int(getattr(config, "SHARE_EXPIRY_GRACE_MINUTES", 10) or 0)) * 60
+
+
+def share_state(token):
+    """'live' | 'expired' | 'revoked' | 'missing'. For the HOST side and the
+    expired page only -- never for anything that must not distinguish
+    expired from nonexistent."""
+    row = get_share(token)
+    if not row:
+        return "missing"
+    if row["revoked"]:
+        return "revoked"
+    if row["expires_at"] <= _now():
+        return "expired"
+    return "live"
+
+
+def is_share_in_grace(token):
+    """True while an un-revoked share is past expiry but still inside the
+    grace window. Used only to let an already-started track finish."""
+    row = get_share(token)
+    if not row or row["revoked"]:
+        return False
+    now = datetime.utcnow()
+    try:
+        expires = datetime.fromisoformat(row["expires_at"])
+    except (TypeError, ValueError):
+        return False
+    return expires <= now < expires + timedelta(seconds=share_grace_seconds())
+
+
+def renew_share(token, hours):
+    """Host action: give a live or expired share more time, keeping its URL
+    and all of its activity. Returns the new expires_at, or None if the
+    share is missing or was ended on purpose (revoked links stay ended --
+    make a new link instead). The new expiry is now + hours, but never
+    earlier than the current one, so renewing can't shorten a link and can't
+    stack time beyond one preset from today."""
+    row = get_share(token)
+    if not row or row["revoked"]:
+        return None
+    now = datetime.utcnow()
+    candidate = now + timedelta(hours=hours)
+    try:
+        current = datetime.fromisoformat(row["expires_at"])
+    except (TypeError, ValueError):
+        current = now
+    new_expiry = max(candidate, current).isoformat()
+    conn = get_db()
+    conn.execute(
+        "UPDATE shares SET expires_at = ?, archived_at = NULL, renewed_at = ?, "
+        "renew_count = COALESCE(renew_count, 0) + 1, renewal_requested_at = NULL "
+        "WHERE share_token = ?",
+        (new_expiry, now.isoformat(), token),
+    )
+    conn.commit()
+    conn.close()
+    return new_expiry
+
+
+def request_share_renewal(token):
+    """Recipient action from the expired page: flags the share so the host
+    sees 'asked for more time'. Only works on a share that expired on its
+    own (never a revoked one) within the last _EXPIRED_PAGE_DAYS days, and
+    is idempotent -- a second tap changes nothing. Carries no message from
+    the visitor. Returns True if the share is flagged (now or already)."""
+    row = get_share(token)
+    if not row or row["revoked"] or row["expires_at"] > _now():
+        return False
+    if not expired_page_visible(row):
+        return False
+    if "renewal_requested_at" not in row.keys():
+        return False                      # migrate_share_renew.py not run yet
+    if row["renewal_requested_at"]:
+        return True
+    conn = get_db()
+    conn.execute(
+        "UPDATE shares SET renewal_requested_at = ? WHERE share_token = ? AND renewal_requested_at IS NULL",
+        (_now(), token),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def expired_page_visible(row):
+    """Whether an expired share is recent enough for the friendly page to
+    name it. Older links look like any unknown link."""
+    try:
+        expires = datetime.fromisoformat(row["expires_at"])
+    except (TypeError, ValueError):
+        return False
+    return datetime.utcnow() - expires <= timedelta(days=_EXPIRED_PAGE_DAYS)
 
 
 def record_share_access(token):

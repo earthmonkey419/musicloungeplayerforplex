@@ -6,6 +6,21 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Share links can be renewed: every live or expired link in Settings now has an **Extend** / **Renew** control with the same durations used to create links. The link keeps its URL and all of its activity history, comes back out of the archive if it was archived, and never ends up with less time than it had. Links you ended (**End Link**) stay ended; create a new one instead
+- Expired share links now show a friendly page (instead of a bare "not found") that names what was shared and who sent it, with an **Ask for a new link** button. Tapping it flags the link for you: it shows **ASKED FOR MORE TIME** in Settings until you renew it. The recipient sends no message and no details. This page only appears for links that expired on their own within the last 30 days; ended, unknown and long-expired links still get the plain not-found page, and the page answers 410 instead of 404 for an expired link
+- Settings: live links within 6 hours of expiring show an **EXPIRING SOON** badge
+- A **7 days** option for share links, shown as "7 days" when creating or renewing a link. It is `168` in `SHARE_LINK_DURATIONS_HOURS`, whose default is now `24,48,72,168`. If your `config.py` or environment sets that list explicitly, add `168` to it
+- New optional `SHARE_EXPIRY_GRACE_MINUTES` setting (default 10; 0 = cut off at the exact moment of expiry)
+
+### Changed
+- When a share link expires while someone is listening, the track that is playing now finishes instead of cutting off mid-song, and then playback stops with an "expired" card offering **Ask for a new link**. Nothing after it starts. The server allows only tracks that browser had already started streaming, and only for the grace period; a link you End has no grace at all. The countdown on the recipient page now follows the server's clock, so a wrong device clock can't expire a link early or late
+- Every share link still always has an expiry: links can only be created or renewed with the configured durations, never as permanent links
+- The "pick a valid duration" message now lists your configured durations instead of a fixed 24/48/72 hours
+
+### Upgrading
+- Existing installs run `python3 migrate_share_renew.py` once (adds three columns to `shares`; safe to repeat). Until it has run, everything keeps working but the renew controls and **Ask for a new link** stay hidden. New installs get the columns from `init_db.py`
+
 ## [2.5.0] - 2026-11-09
 
 ### Added
