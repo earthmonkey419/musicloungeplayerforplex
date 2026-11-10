@@ -46,6 +46,15 @@ def create_app():
 
     app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
+    @app.template_filter("duration_label")
+    def duration_label(hours):
+        """72 -> '72 hrs', 168 -> '7 days' (whole days from 4 days up)."""
+        try:
+            h = int(hours)
+        except (TypeError, ValueError):
+            return str(hours)
+        return f"{h // 24} days" if h >= 96 and h % 24 == 0 else f"{h} hrs"
+
     @app.context_processor
     def inject_globals():
         return {"current_year": datetime.utcnow().year}

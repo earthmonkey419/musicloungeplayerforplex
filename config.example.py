@@ -57,7 +57,7 @@ ROOM_SKIP_RATE_LIMIT_SECONDS = _int("ROOM_SKIP_RATE_LIMIT_SECONDS", 20)
 ROOM_MAX_QUEUE_ADDS_PER_SESSION = _int("ROOM_MAX_QUEUE_ADDS_PER_SESSION", 50)
 
 # --- Mode B: Share (launched from Player, same code as musiclounge) ---
-SHARE_LINK_DURATIONS_HOURS = _int_list("SHARE_LINK_DURATIONS_HOURS", [24, 48, 72])
+SHARE_LINK_DURATIONS_HOURS = _int_list("SHARE_LINK_DURATIONS_HOURS", [24, 48, 72, 168])   # 168 = 7 days
 SHARE_TOKEN_BYTES = _int("SHARE_TOKEN_BYTES", 32)
 # Share-link activity history is kept indefinitely by default. Set a
 # number of days to delete older raw activity events (0 = keep forever).

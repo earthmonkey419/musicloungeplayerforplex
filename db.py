@@ -293,7 +293,7 @@ def log_action(session_id, action_type, detail=""):
 
 def create_share(content_type, content_ref, content_title, content_artist, duration_hours):
     """Mints a share as a DB row -- long random token, expiry set at
-    creation time from the fixed 24/48/72hr set. Per the scope doc:
+    creation time from the configured set of durations. Per the scope doc:
     a DB row rather than a signed token, because it's free (same
     pattern as room_sessions) and keeps revocation possible."""
     token = secrets.token_urlsafe(config.SHARE_TOKEN_BYTES)

@@ -35,7 +35,7 @@
     <p class="pl-caption" style="margin:0 0 14px;">Link expires after:</p>
     <div style="display:flex; gap:8px;">
       {% for hrs in durations %}
-      <div class="stage-chip" style="flex:1;" onclick="selectDuration({{ hrs }}, this)">{{ hrs }} HRS</div>
+      <div class="stage-chip" style="flex:1;" onclick="selectDuration({{ hrs }}, this)">{{ hrs|duration_label|upper }}</div>
       {% endfor %}
     </div>
   </div>
@@ -139,6 +139,10 @@ function pickContent(item, el) {
   updateCreateButton();
 }
 
+function durationLabel(h) {
+  return (h >= 96 && h % 24 === 0) ? (h / 24) + ' days' : h + ' hours';
+}
+
 function selectDuration(hrs, el) {
   selectedDuration = hrs;
   document.querySelectorAll('#flow-stages .pl-card:nth-child(3) .stage-chip').forEach(c => c.classList.remove('stage-chip-selected'));
@@ -179,7 +183,7 @@ function createLink() {
       document.getElementById('flow-stages').style.display = 'none';
       btn.style.display = 'none';
       document.getElementById('confirm-summary').textContent =
-        `${selectedContent.title} — expires in ${selectedDuration} hours`;
+        `${selectedContent.title} — expires in ${durationLabel(selectedDuration)}`;
       document.getElementById('share-url-display').value = currentShareUrl;
       document.getElementById('confirm-panel').style.display = 'block';
     })

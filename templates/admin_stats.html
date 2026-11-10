@@ -92,7 +92,7 @@
               <input type="hidden" name="token" value="{{ s.share_token }}">
               {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
               <select name="hours" aria-label="Extend this link by" class="pl-text-input" style="padding:4px 6px; font-size:11px; width:auto;">
-                {% for h in renew_durations %}<option value="{{ h }}">{{ h }} hrs</option>{% endfor %}
+                {% for h in renew_durations %}<option value="{{ h }}">{{ h|duration_label }}</option>{% endfor %}
               </select>
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">{{ "Renew" if s.status == "expired" else "Extend" }}</button>
             </form>
@@ -108,7 +108,7 @@
               <input type="hidden" name="token" value="{{ s.share_token }}">
               {% if show_archived %}<input type="hidden" name="archived" value="1">{% endif %}
               <select name="hours" aria-label="Extend this link by" class="pl-text-input" style="padding:4px 6px; font-size:11px; width:auto;">
-                {% for h in renew_durations %}<option value="{{ h }}">{{ h }} hrs</option>{% endfor %}
+                {% for h in renew_durations %}<option value="{{ h }}">{{ h|duration_label }}</option>{% endfor %}
               </select>
               <button type="submit" class="btn-secondary" style="padding:5px 10px; font-size:11px;">{{ "Renew" if s.status == "expired" else "Extend" }}</button>
             </form>
