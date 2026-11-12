@@ -97,7 +97,7 @@
       <tbody>
         {% for s in shares %}
         <tr style="border-bottom:1px solid var(--pl-border);">
-          <td style="padding:8px 6px;">{{ s.content_title or "--" }}{% if s.content_artist %}<br><span style="color:var(--pl-text-secondary); font-size:12px;">{{ s.content_artist }}</span>{% endif %}</td>
+          <td style="padding:8px 6px;"><a href="{{ url_for('linked.view_share', share_token=s.share_token) }}" target="_blank" rel="noopener" style="color:inherit; font-weight:700; text-decoration:underline;">{{ s.content_title or "--" }}</a>{% if s.content_artist %}<br><span style="color:var(--pl-text-secondary); font-size:12px;">{{ s.content_artist }}</span>{% endif %}</td>
           <td style="padding:8px 6px;">{{ s.content_type }}</td>
           <td style="padding:8px 6px;">
             {% if s.status == "live" %}<span class="pl-badge pl-badge-live">LIVE</span>{% if s.expiring_soon %}<br><span class="pl-badge pl-badge-neutral" style="margin-top:4px;">EXPIRING SOON</span>{% endif %}
