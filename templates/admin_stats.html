@@ -97,7 +97,7 @@
       <tbody>
         {% for s in shares %}
         <tr style="border-bottom:1px solid var(--pl-border);">
-          <td style="padding:8px 6px;"><a href="{{ url_for('linked.view_share', share_token=s.share_token) }}" target="_blank" rel="noopener" style="color:inherit; font-weight:700; text-decoration:underline;">{{ s.content_title or "--" }}</a>{% if s.content_artist %}<br><span style="color:var(--pl-text-secondary); font-size:12px;">{{ s.content_artist }}</span>{% endif %}</td>
+          <td style="padding:8px 6px;">{% if s.content_type == "album" %}<a href="{{ url_for('browse.album_detail', rating_key=s.content_ref) }}" class="share-content-link">{{ s.content_title or "--" }}</a>{% elif s.content_type == "artist" %}<a href="{{ url_for('browse.artist_detail', rating_key=s.content_ref) }}" class="share-content-link">{{ s.content_title or "--" }}</a>{% elif s.content_type == "playlist" %}<a href="{{ url_for('playlists.plex_detail', rating_key=s.content_ref) }}" class="share-content-link">{{ s.content_title or "--" }}</a>{% elif s.content_type == "track" %}<a href="#" data-share-track="{{ s.content_ref }}" class="share-content-link" title="Opens this track's album">{{ s.content_title or "--" }}</a>{% else %}{{ s.content_title or "--" }}{% endif %}{% if s.content_artist %}<br><span style="color:var(--pl-text-secondary); font-size:12px;">{{ s.content_artist }}</span>{% endif %}</td>
           <td style="padding:8px 6px;">{{ s.content_type }}</td>
           <td style="padding:8px 6px;">
             {% if s.status == "live" %}<span class="pl-badge pl-badge-live">LIVE</span>{% if s.expiring_soon %}<br><span class="pl-badge pl-badge-neutral" style="margin-top:4px;">EXPIRING SOON</span>{% endif %}
@@ -251,6 +251,33 @@
         if (legacyCopy(url)) done(); else manual();
       });
     } else if (legacyCopy(url)) { done(); } else { manual(); }
+  });
+})();
+</script>
+<style>
+  .share-content-link { color: inherit; font-weight: 700; text-decoration: underline; }
+</style>
+<script>
+(function () {
+  // Track shares have no page of their own, so resolve the track's album with
+  // the same JSON lookup "Go to Album" uses, then click a real <a> so
+  // spa-nav.js handles it without stopping playback.
+  if (window.__mlShareTrackBound) return;
+  window.__mlShareTrackBound = true;
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest("[data-share-track]");
+    if (!link) return;
+    e.preventDefault();
+    fetch("/browse/api/album-for-track/" + encodeURIComponent(link.getAttribute("data-share-track")), { credentials: "same-origin" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) {
+        var a = document.createElement("a");
+        a.href = "/browse/album/" + encodeURIComponent(d.album_rating_key);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      })
+      .catch(function () { link.title = "Couldn't find that track in your library."; });
   });
 })();
 </script>
