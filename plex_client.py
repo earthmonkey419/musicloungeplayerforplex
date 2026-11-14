@@ -359,6 +359,22 @@ def list_all_albums():
     ]
 
 
+def list_album_genres():
+    """The library's real Plex album genre tags, A-Z. Browse -> Genres
+    falls back to these when MusicMind isn't available."""
+    section = get_music_section()
+    titles = {g.title for g in section.listFilterChoices("genre", libtype="album") if g.title}
+    return sorted(titles, key=str.lower)
+
+
+def album_keys_for_genre(genre):
+    """Rating keys of every album carrying one Plex genre tag (exact
+    match, same "album.genre" filter style as tracks_by_mood)."""
+    section = get_music_section()
+    albums = section.searchAlbums(**{"album.genre": genre}, container_size=1000)
+    return {a.ratingKey for a in albums}
+
+
 def get_artist_detail(rating_key):
     """Returns (artist_title, [album dicts]) for one artist, albums
     sorted by year (newest first), falling back to title for albums

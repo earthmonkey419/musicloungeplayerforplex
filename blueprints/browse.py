@@ -71,6 +71,36 @@ def api_tracks():
         return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
 
 
+@bp.route("/api/genres")
+@admin_required
+def api_genres():
+    """Genre list for Browse's Genres dropdown: MusicMind tags when
+    available, else Plex album genres. "source" tells the page which,
+    since only MusicMind genres can be ranked by best match."""
+    source, genres = library_browse.available_genres()
+    return jsonify({"source": source, "genres": genres})
+
+
+@bp.route("/api/genre-albums")
+@admin_required
+def api_genre_albums():
+    """Albums for one MusicMind tag (Browse -> Genres). The tag is a
+    query param, not a path segment: tags can contain "/" and other
+    characters."""
+    tag = request.args.get("tag", "").strip()
+    if not tag:
+        return jsonify({"error": "Missing genre."}), 400
+    offset = max(0, request.args.get("offset", 0, type=int) or 0)
+    limit = min(96, max(1, request.args.get("limit", 48, type=int) or 48))
+    sort = request.args.get("sort", "match")
+    try:
+        page = library_browse.genre_albums_page(tag, offset=offset, limit=limit, sort=sort)
+    except Exception:
+        current_app.logger.exception("Genre albums failed for: %r", tag)
+        return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
+    return jsonify(page)
+
+
 @bp.route("/api/letter-offset")
 @admin_required
 def api_letter_offset():

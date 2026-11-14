@@ -6,6 +6,9 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Browse has a new **Genres** pill. Pick a genre from the dropdown and the grid shows the albums that match it, ranked by how much of each album carries the genre (**Best match**), or sorted by title, artist, year or date added. With MusicMind connected, genres are its tags (the same list as the search page's Tags field, so a few mood-type tags such as "upbeat" appear alongside real genres), and an album counts when at least a quarter of its tracks carry the tag. Without MusicMind, the list is Plex's own album genres and there is no Best match sort. No migration needed
+
 ## [2.6.0] - 2026-11-10
 
 ### Added
