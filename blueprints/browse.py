@@ -101,6 +101,21 @@ def api_genre_albums():
     return jsonify(page)
 
 
+@bp.route("/api/genre-shuffle")
+@admin_required
+def api_genre_shuffle():
+    """Tracks for Browse -> Genres' Shuffle button: a random mix drawn
+    from the albums the grid shows for this genre."""
+    tag = request.args.get("tag", "").strip()
+    if not tag:
+        return jsonify({"error": "Missing genre."}), 400
+    try:
+        return jsonify(library_browse.genre_shuffle_tracks(tag))
+    except Exception:
+        current_app.logger.exception("Genre shuffle failed for: %r", tag)
+        return jsonify({"error": "Couldn't reach the music library. Try again in a moment."}), 502
+
+
 @bp.route("/api/letter-offset")
 @admin_required
 def api_letter_offset():

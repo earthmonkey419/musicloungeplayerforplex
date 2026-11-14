@@ -24,6 +24,7 @@ functions are called directly with no caching.
 import bisect
 import json
 import os
+import random
 import threading
 import time
 
@@ -320,14 +321,18 @@ def available_genres():
     return "plex", cached or []
 
 
-def _plex_genre_page(genre, offset, limit, sort):
+def _plex_genre_pool(genre):
     cache_key = ("plex_genre_albums", genre.lower())
     keys = result_cache.cache_get(cache_key)
     if keys is None:
         keys = plex_client.album_keys_for_genre(genre)
         if keys:
             result_cache.cache_set(cache_key, keys, ttl=result_cache._MOOD_CACHE_TTL)
-    pool = [a for a in (_get_pool("albums") or []) if a["rating_key"] in keys]
+    return [a for a in (_get_pool("albums") or []) if a["rating_key"] in keys]
+
+
+def _plex_genre_page(genre, offset, limit, sort):
+    pool = _plex_genre_pool(genre)
     # No "best match" with a Plex genre: an album has it or it doesn't.
     sort = sort if sort in _ALBUM_SORTS else "title"
     return result_cache.paged(_sort_albums(pool, sort), offset, limit)
@@ -344,10 +349,9 @@ def genre_albums_page(genre, offset=0, limit=48, sort="match"):
     return _plex_genre_page(genre, offset, limit, sort)
 
 
-def albums_by_tag_page(tag, offset=0, limit=48, sort="match"):
-    """Paginated albums for one MusicMind tag. sort is "match" (share of
-    the album's tracks carrying the tag, the default) or any normal
-    album sort. Returns None if MusicMind isn't available."""
+def _tag_album_pool(tag):
+    """Cached albums for one MusicMind tag, best match first, or None
+    if MusicMind isn't available."""
     cache_key = ("tag_album_pool", tag.lower())
     pool = result_cache.cache_get(cache_key)
     if pool is None:
@@ -356,6 +360,50 @@ def albums_by_tag_page(tag, offset=0, limit=48, sort="match"):
             return None
         if pool:  # never cache an empty result -- it would stick for an hour
             result_cache.cache_set(cache_key, pool, ttl=result_cache._MOOD_CACHE_TTL)
+    return pool
+
+
+SHUFFLE_ALBUMS = 12   # albums sampled per press; keeps Plex round trips bounded
+
+
+def genre_shuffle_tracks(genre, limit=50):
+    """A fresh shuffle for the Genres pill's Shuffle button: tracks from
+    the SAME albums the grid shows for this genre, so what you see is
+    what plays. Samples up to SHUFFLE_ALBUMS of them at random (a
+    different mix each press), loads their full tracklists from Plex
+    (cached briefly per album), shuffles, and returns up to `limit`
+    tracks. Uses the same MusicMind-or-Plex rule as the grid."""
+    if available_genres()[0] == "musicmind":
+        pool = _tag_album_pool(genre)
+        if pool is None:
+            pool = _plex_genre_pool(genre)
+    else:
+        pool = _plex_genre_pool(genre)
+    if not pool:
+        return {"results": [], "albums": 0}
+    picked = random.sample(pool, min(SHUFFLE_ALBUMS, len(pool)))
+    tracks = []
+    for album in picked:
+        ck = ("album_tracks", album["rating_key"])
+        album_tracks = result_cache.cache_get(ck)
+        if album_tracks is None:
+            try:
+                album_tracks = plex_client.get_album_detail(album["rating_key"])[2]
+            except Exception:
+                continue  # one unreachable album shouldn't sink the shuffle
+            result_cache.cache_set(ck, album_tracks)
+        tracks.extend(album_tracks)
+    random.shuffle(tracks)
+    return {"results": tracks[:limit], "albums": len(picked)}
+
+
+def albums_by_tag_page(tag, offset=0, limit=48, sort="match"):
+    """Paginated albums for one MusicMind tag. sort is "match" (share of
+    the album's tracks carrying the tag, the default) or any normal
+    album sort. Returns None if MusicMind isn't available."""
+    pool = _tag_album_pool(tag)
+    if pool is None:
+        return None
     if sort in _ALBUM_SORTS:
         pool = _sort_albums(pool, sort)
     return result_cache.paged(pool, offset, limit)
