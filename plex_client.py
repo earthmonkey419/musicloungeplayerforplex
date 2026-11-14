@@ -68,6 +68,12 @@ def _track_to_dict(track):
         "title": track.title,
         "artist": track.originalTitle or track.grandparentTitle or "Unknown Artist",
         "album": track.parentTitle or "",
+        # Album identity, used to tell a single-album share from a mixed
+        # playlist (compare IDs, never title strings -- two different
+        # albums can share a name). Extra keys are safe for the callers
+        # that only read rating_key/title/artist/duration_sec.
+        "album_key": getattr(track, "parentRatingKey", None),
+        "album_year": getattr(track, "parentYear", None),
         "duration_sec": duration_sec,
         "play_count": getattr(track, "viewCount", 0) or 0,
     }
@@ -289,6 +295,60 @@ def get_content_tracks(content_type, rating_key, limit=100):
         raise ValueError(f"Unknown content_type: {content_type}")
 
     return title, artist, [_track_to_dict(t) for t in tracks]
+
+
+_ALBUM_INFO_TTL = 600
+_album_info_cache = {}  # {album_key: (timestamp, info-dict)}
+
+
+def _album_details(album_key):
+    """Display details for one album, cached briefly. Only fields Plex
+    actually has are filled; the template skips the rest."""
+    now = _time.time()
+    hit = _album_info_cache.get(album_key)
+    if hit and now - hit[0] < _ALBUM_INFO_TTL:
+        return hit[1]
+    album = get_plex().fetchItem(int(album_key))
+    info = {
+        "rating_key": album.ratingKey,
+        "title": album.title,
+        "artist": album.parentTitle or "",
+        "year": getattr(album, "year", None),
+        "genres": [g.tag for g in (getattr(album, "genres", None) or [])][:3],
+        "label": (getattr(album, "studio", None) or "").strip(),
+        "summary": (getattr(album, "summary", None) or "").strip(),
+        "total_tracks": getattr(album, "leafCount", None),
+    }
+    _album_info_cache[album_key] = (now, info)
+    return info
+
+
+def get_share_album_info(content_type, content_ref, tracks):
+    """Album details for a share page, or None.
+
+    Returns a dict when the share should get the album header: an album
+    share, or a playlist/artist share where every track (two or more)
+    comes from the same album ID. A single-track share returns None --
+    it keeps its track layout and shows the album as a line instead.
+    Never raises: album info is decoration, so any Plex hiccup just means
+    the page falls back to the plain layout."""
+    try:
+        keys = {t.get("album_key") for t in tracks}
+        keys.discard(None)
+        if content_type.lower() == "album":
+            album_key = int(content_ref)
+        elif len(tracks) >= 2 and len(keys) == 1 and all(t.get("album_key") for t in tracks):
+            album_key = next(iter(keys))
+        else:
+            return None
+        info = dict(_album_details(album_key))
+        info["shared_tracks"] = len(tracks)
+        info["runtime_sec"] = sum(t.get("duration_sec") or 0 for t in tracks)
+        total = info.get("total_tracks")
+        info["is_partial"] = bool(total) and len(tracks) < total
+        return info
+    except Exception:
+        return None
 
 
 def track_art_path(rating_key):
