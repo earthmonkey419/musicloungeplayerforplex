@@ -9,6 +9,24 @@
   <div class="album-header-info">
     <h1 style="font-size:28px; line-height:36px; margin:0;">{{ album_title }}</h1>
     <p class="pl-small" style="margin-top:4px;">{{ artist_title }}</p>
+    {% if album_info %}
+    {% set mins = (album_info.runtime_sec // 60) %}
+    {% set bits = [] %}
+    {% if album_info.year %}{% set _ = bits.append(album_info.year|string) %}{% endif %}
+    {% set _ = bits.append(album_info.shown_tracks ~ (" track" if album_info.shown_tracks == 1 else " tracks")) %}
+    {% if mins >= 60 %}{% set _ = bits.append((mins // 60) ~ " hr " ~ (mins % 60) ~ " min") %}
+    {% elif mins > 0 %}{% set _ = bits.append(mins ~ " min") %}{% endif %}
+    <p class="pl-small album-header-meta">{{ bits|join(" · ") }}</p>
+    {% if album_info.genres or album_info.label %}
+    <p class="pl-small album-header-meta">{{ (album_info.genres + ([album_info.label] if album_info.label else []))|join(" · ") }}</p>
+    {% endif %}
+    {% if album_info.summary %}
+    <details class="album-header-about">
+      <summary class="pl-small">About this album</summary>
+      <p class="pl-small">{{ album_info.summary }}</p>
+    </details>
+    {% endif %}
+    {% endif %}
     {% if tracks %}
     <div class="album-header-actions">
       <button id="play-album-btn" class="pl-btn pl-btn-primary">▶ Play Album</button>

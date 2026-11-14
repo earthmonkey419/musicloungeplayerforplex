@@ -351,6 +351,20 @@ def get_share_album_info(content_type, content_ref, tracks):
         return None
 
 
+def get_album_page_info(rating_key, tracks):
+    """Album details for the album browse page (year, runtime, genres,
+    label, summary), or None. Same data and the same short cache as the
+    share page's album header. Never raises: album info is decoration,
+    so any Plex hiccup just means the page shows title and artist only."""
+    try:
+        info = dict(_album_details(int(rating_key)))
+        info["runtime_sec"] = sum(t.get("duration_sec") or 0 for t in tracks)
+        info["shown_tracks"] = len(tracks)
+        return info
+    except Exception:
+        return None
+
+
 def track_art_path(rating_key):
     """Returns the Plex thumb `key` path (no token) for an item's cover
     art. For tracks: prefers the album's cover via parentThumb over

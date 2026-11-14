@@ -169,9 +169,11 @@ def album_detail(rating_key):
     except Exception:
         current_app.logger.exception("Failed to load album rating_key=%r", rating_key)
         return "Couldn't load that album.", 502
+    album_info = plex_client.get_album_page_info(rating_key, tracks) if tracks else None
     native_playlists = [dict(p) for p in db.list_playlists() if p["source"] == "native"]
     return render_template(
         "browse_album_detail.html",
+        album_info=album_info,
         album_title=album_title,
         artist_title=artist_title,
         tracks=tracks,
