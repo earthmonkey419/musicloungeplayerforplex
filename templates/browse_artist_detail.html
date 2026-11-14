@@ -3,7 +3,7 @@
 {% block body_class %}ml-player-theme{% endblock %}
 {% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
 {% block content %}
-<a href="{{ url_for('browse.artists') }}" class="link-manage">← All Artists</a>
+<a href="javascript:history.back()" class="link-manage">← Back</a>
 <h1 style="font-size:32px; margin:var(--pl-space-sm) 0 var(--pl-space-lg);">{{ artist_title }}</h1>
 
 <div class="browse-grid">

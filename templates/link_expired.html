@@ -12,7 +12,7 @@
   <p style="color:var(--pl-text-secondary); margin-bottom:{{ '16px' if can_ask else '0' }};">
     {% if shared_by %}{{ shared_by }} shared this with you, but share{% else %}Share{% endif %}
     links are only good for a little while.
-    {% if can_ask %}If you'd like more time, you can let {{ shared_by or "the person who sent it" }} know and they can reopen it.{% else %}Ask {{ shared_by or "whoever sent this one" }} for a fresh link.{% endif %}
+    {% if can_ask %}Please ask {{ shared_by or "the sender" }} to reactivate this link. The button below will let them know.{% else %}Please ask {{ shared_by or "the sender" }} to reactivate this link.{% endif %}
   </p>
   {% if can_ask %}
   <button id="ask-btn" class="pl-btn pl-btn-primary" {% if already_asked %}disabled{% endif %}>{% if already_asked %}Request sent{% else %}Ask for a new link{% endif %}</button>
@@ -20,8 +20,8 @@
   {% endif %}
   {% else %}
   <p style="color:var(--pl-text-secondary); margin-bottom:0;">
-    Share links are only good for a little while. Ask whoever sent
-    this one for a fresh link.
+    Share links are only good for a little while. Please ask the
+    sender to reactivate this link.
   </p>
   {% endif %}
 </div>
