@@ -303,6 +303,46 @@ def tracks_by_tag_page(tag, offset=0, limit=20, shuffle_seed=None):
     return result_cache.paged_shuffled(pool, offset, limit, seed=shuffle_seed, weight_key="play_count")
 
 
+def tag_album_groups(tag):
+    """Per-album counts of tracks carrying an exact tag, for Browse's
+    Genres pill (which shows ALBUMS, not tracks). MusicMind's tracks
+    table has the album's title but no Plex album rating key, so this
+    returns one row per (album title, resolved artist) --
+    {"album", "artist", "tagged"} -- and library_browse matches those
+    rows back onto Player's own cached Plex album pool. Resolved
+    artist (real_artist when present) is the per-track performer, so
+    on a Various Artists album it is NOT the album artist; the matcher
+    in library_browse accounts for that.
+
+    Returns None if MusicMind isn't available or the query fails."""
+    if not is_available():
+        return None
+    cache_key = ("tag_album_groups", tag.lower())
+    cached = result_cache.cache_get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        conn = _connect()
+        try:
+            conn.row_factory = sqlite3.Row
+            artist_expr = _artist_expr(conn, prefix="t.")
+            rows = conn.execute(
+                f"SELECT t.album AS album, {artist_expr} AS artist, COUNT(*) AS tagged "
+                "FROM tracks t JOIN track_tags tt ON tt.rating_key = t.rating_key "
+                "WHERE LOWER(tt.tag) = ? AND t.album IS NOT NULL AND t.album != '' "
+                "GROUP BY LOWER(t.album), LOWER(COALESCE(" + artist_expr + ", ''))",
+                (tag.lower(),),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return None
+    groups = [{"album": r["album"], "artist": r["artist"] or "", "tagged": r["tagged"]} for r in rows]
+    if groups:  # never cache an empty result -- it would stick for an hour
+        result_cache.cache_set(cache_key, groups, ttl=result_cache._MOOD_CACHE_TTL)
+    return groups
+
+
 def _filter_instrumental(tracks):
     """Keeps only tracks confidently instrumental. is_instrumental=1
     alone isn't strict enough -- the original VI classification pass

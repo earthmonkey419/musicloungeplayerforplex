@@ -11,6 +11,13 @@
       <button class="mood-pill browse-type-btn" data-type="artists">Artists</button>
       <button class="mood-pill browse-type-btn" data-type="albums">Albums</button>
       <button class="mood-pill browse-type-btn" data-type="tracks">Tracks</button>
+      <button id="genres-type-btn" class="mood-pill browse-type-btn" data-type="genres" hidden>Genres</button>
+    </div>
+    <div id="genre-picker" style="display:none; align-items:center; gap:8px;">
+      <label class="pl-caption" for="genre-select">Genre</label>
+      <select id="genre-select" class="pl-text-input" style="padding:8px 12px; max-width:240px;">
+        <option value="">Choose a genre…</option>
+      </select>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
       <label class="pl-caption" for="sort-select">Sort by</label>
@@ -63,12 +70,24 @@ const SORT_OPTIONS = {
     { value: "artist", label: "Artist (A–Z)" },
     { value: "album", label: "Album (A–Z)" },
   ],
+  // Genres shows albums that match the chosen genre. "match" (MusicMind
+  // only; dropped when the list comes from Plex) ranks by the share of
+  // each album's tracks carrying the tag.
+  genres: [
+    { value: "match", label: "Best match" },
+    { value: "title", label: "Title (A–Z)" },
+    { value: "artist", label: "Artist (A–Z)" },
+    { value: "year", label: "Year (Newest)" },
+    { value: "added", label: "Recently Added" },
+  ],
 };
 
 const PAGE_SIZE = 48;
 const params = new URLSearchParams(window.location.search);
-let currentType = ["albums", "tracks"].includes(params.get("type")) ? params.get("type") : "artists";
-let currentSort = params.get("sort") || "added";
+let currentType = ["albums", "tracks", "genres"].includes(params.get("type")) ? params.get("type") : "artists";
+let currentSort = params.get("sort") || (currentType === "genres" ? "match" : "added"); // loadGenres() corrects "match" for Plex
+let currentGenre = params.get("genre") || "";
+let genreSource = "musicmind"; // or "plex": set once /browse/api/genres loads
 let offset = 0;
 let hasMore = true;
 let loading = false;
@@ -84,6 +103,9 @@ playAllBtn.addEventListener("click", () => {
 const backToTopBtn = document.getElementById("browse-back-to-top");
 const sortSelect = document.getElementById("sort-select");
 const typeButtons = document.querySelectorAll(".browse-type-btn");
+const genresBtn = document.getElementById("genres-type-btn");
+const genrePicker = document.getElementById("genre-picker");
+const genreSelect = document.getElementById("genre-select");
 
 const atpModal = document.getElementById("add-to-playlist-modal");
 const atpTrackLabel = document.getElementById("atp-track-label");
@@ -95,6 +117,7 @@ function updateUrl() {
   const p = new URLSearchParams();
   p.set("type", currentType);
   p.set("sort", currentSort);
+  if (currentType === "genres" && currentGenre) p.set("genre", currentGenre);
   history.replaceState(null, "", `${window.location.pathname}?${p.toString()}`);
 }
 
@@ -168,6 +191,17 @@ function trackRow(t, indexInAllLoaded) {
   return li;
 }
 
+function showGridMessage(text) {
+  gridEl.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "pl-small";
+  p.style.padding = "var(--pl-space-md)";
+  p.textContent = text;
+  gridEl.appendChild(p);
+  hasMore = false;
+  removeSentinel();
+}
+
 function removeSentinel() {
   const s = document.getElementById("browse-sentinel");
   if (s) s.remove();
@@ -189,16 +223,25 @@ function ensureSentinel() {
 
 async function loadPage() {
   if (loading || !hasMore) return;
+  if (currentType === "genres" && !currentGenre) {
+    showGridMessage("Pick a genre to see its albums.");
+    return;
+  }
   loading = true;
-  const endpoint = { artists: "/browse/api/artists", albums: "/browse/api/albums", tracks: "/browse/api/tracks" }[currentType];
+  const endpoint = { artists: "/browse/api/artists", albums: "/browse/api/albums", tracks: "/browse/api/tracks", genres: "/browse/api/genre-albums" }[currentType];
+  const genreArg = currentType === "genres" ? `&tag=${encodeURIComponent(currentGenre)}` : "";
   let data;
   try {
-    const res = await fetch(`${endpoint}?offset=${offset}&limit=${PAGE_SIZE}&sort=${currentSort}`);
+    const res = await fetch(`${endpoint}?offset=${offset}&limit=${PAGE_SIZE}&sort=${currentSort}${genreArg}`);
     data = await res.json();
     if (data.error) throw new Error(data.error);
   } catch (e) {
     loading = false;
+    if (currentType === "genres" && offset === 0) showGridMessage("Couldn't load that genre. Try again in a moment.");
     return;
+  }
+  if (currentType === "genres" && offset === 0 && !data.results.length) {
+    showGridMessage("No albums matched that genre.");
   }
   if (currentType === "tracks") {
     data.results.forEach(t => {
@@ -206,7 +249,7 @@ async function loadPage() {
       gridEl.appendChild(trackRow(t, allLoadedTracks.length - 1));
     });
   } else {
-    const tileFn = currentType === "albums" ? albumTile : artistTile;
+    const tileFn = (currentType === "albums" || currentType === "genres") ? albumTile : artistTile;
     data.results.forEach(item => gridEl.appendChild(tileFn(item)));
   }
   hasMore = !!data.has_more;
@@ -242,7 +285,13 @@ const quickbarEl = document.getElementById("az-quickbar");
 });
 
 function updateQuickbarVisibility() {
-  quickbarEl.hidden = currentSort !== "title";
+  // The A-Z jump runs over the whole-library pool, not a genre's subset.
+  quickbarEl.hidden = currentSort !== "title" || currentType === "genres";
+}
+
+function updateGenrePickerVisibility() {
+  // Inline style, not [hidden]: the wrapper's own display would override it.
+  genrePicker.style.display = currentType === "genres" ? "flex" : "none";
 }
 
 function updatePlayAllVisibility() {
@@ -334,13 +383,21 @@ typeButtons.forEach(btn => {
   btn.addEventListener("click", () => {
     if (btn.dataset.type === currentType) return;
     currentType = btn.dataset.type;
+    if (currentType === "genres") currentSort = genreSource === "plex" ? "title" : "match";
     populateSortOptions();
     setActiveTypeButton();
     updateUrl();
     updateQuickbarVisibility();
     updatePlayAllVisibility();
+    updateGenrePickerVisibility();
     resetAndLoad();
   });
+});
+
+genreSelect.addEventListener("change", () => {
+  currentGenre = genreSelect.value;
+  updateUrl();
+  resetAndLoad();
 });
 
 sortSelect.addEventListener("change", () => {
@@ -356,13 +413,63 @@ scrollEl.addEventListener("scroll", () => {
 });
 backToTopBtn.addEventListener("click", () => scrollEl.scrollTo({ top: 0, behavior: "smooth" }));
 
-populateSortOptions();
-setActiveTypeButton();
-gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
-updateUrl();
-updateQuickbarVisibility();
-updatePlayAllVisibility();
-loadPage();
+// Genres come from MusicMind's tags when it is available, otherwise from
+// Plex's album genres (the server decides; see /browse/api/genres). The
+// pill only appears when the list is non-empty; if it is empty, a
+// ?type=genres link falls back to Artists.
+function titleCase(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+async function loadGenres() {
+  try {
+    const res = await fetch("/browse/api/genres");
+    const data = await res.json();
+    genreSource = data.source === "plex" ? "plex" : "musicmind";
+    if (genreSource === "plex") {
+      // Plex genres are plain membership, so there is nothing to rank by.
+      SORT_OPTIONS.genres = SORT_OPTIONS.genres.filter(o => o.value !== "match");
+      if (currentType === "genres" && currentSort === "match") currentSort = "title";
+    }
+    const tags = (data.genres || []).filter(Boolean);
+    tags.sort((a, b) => a.localeCompare(b));
+    tags.forEach(tag => {
+      const el = document.createElement("option");
+      el.value = tag;
+      el.textContent = titleCase(tag);
+      genreSelect.appendChild(el);
+    });
+    if (tags.length) genresBtn.hidden = false;
+    return tags;
+  } catch (e) {
+    return [];
+  }
+}
+
+function start() {
+  populateSortOptions();
+  setActiveTypeButton();
+  gridEl.className = currentType === "tracks" ? "track-list" : "browse-grid";
+  updateUrl();
+  updateQuickbarVisibility();
+  updatePlayAllVisibility();
+  updateGenrePickerVisibility();
+  loadPage();
+}
+
+if (currentType === "genres") {
+  // Needs the list first so the saved genre can be re-selected.
+  loadGenres().then(tags => {
+    if (!tags.length) { currentType = "artists"; currentSort = "added"; }
+    else {
+      const match = tags.find(t => t.toLowerCase() === currentGenre.toLowerCase());
+      currentGenre = match || "";
+      genreSelect.value = currentGenre;
+    }
+    start();
+  });
+} else {
+  start();
+  loadGenres();
+}
 
 // SPA-nav teardown -- disconnects the IntersectionObserver before
 // this page's content is swapped out.
