@@ -71,7 +71,7 @@
     title.textContent = "This link has expired.";
     var blurb = document.createElement("p");
     blurb.style.cssText = "color:var(--pl-text-secondary); margin:0 0 16px;";
-    blurb.textContent = "Share links are only good for a little while. If you'd like more time, you can let the person who sent it know.";
+    blurb.textContent = "Share links are only good for a little while. Please ask the sender to reactivate this link. The button below will let them know.";
 
     var ask = document.createElement("button");
     ask.className = "pl-btn pl-btn-primary";

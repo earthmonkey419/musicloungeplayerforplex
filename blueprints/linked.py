@@ -87,6 +87,10 @@ def view_share(share_token):
         artist = share["content_artist"]
         tracks = []
 
+    # Album header for single-album shares; None for playlists/mixed
+    # content (those get a per-row album line instead). Never raises.
+    album_info = plex_client.get_share_album_info(share["content_type"], share["content_ref"], tracks) if tracks else None
+
     media_access.remember_share(share_token, share["content_ref"], tracks)
     _remember_titles(share_token, tracks)
 
@@ -107,6 +111,7 @@ def view_share(share_token):
         tracks=tracks,
         content_title=title,
         content_artist=artist,
+        album_info=album_info,
         server_now=datetime.utcnow().isoformat(),
         grace_seconds=db.share_grace_seconds(),
         needs_audio_bar=True,

@@ -18,6 +18,7 @@
       <select id="genre-select" class="pl-text-input" style="padding:8px 12px; max-width:240px;">
         <option value="">Choose a genre…</option>
       </select>
+      <button id="genre-shuffle-btn" class="pl-btn pl-btn-mint" type="button" hidden title="Play a shuffle of the albums shown">▶ Shuffle genre</button>
     </div>
     <div style="display:flex; align-items:center; gap:8px;">
       <label class="pl-caption" for="sort-select">Sort by</label>
@@ -106,6 +107,7 @@ const typeButtons = document.querySelectorAll(".browse-type-btn");
 const genresBtn = document.getElementById("genres-type-btn");
 const genrePicker = document.getElementById("genre-picker");
 const genreSelect = document.getElementById("genre-select");
+const genreShuffleBtn = document.getElementById("genre-shuffle-btn");
 
 const atpModal = document.getElementById("add-to-playlist-modal");
 const atpTrackLabel = document.getElementById("atp-track-label");
@@ -289,9 +291,14 @@ function updateQuickbarVisibility() {
   quickbarEl.hidden = currentSort !== "title" || currentType === "genres";
 }
 
+function updateGenreShuffleVisibility() {
+  genreShuffleBtn.hidden = !(currentType === "genres" && currentGenre);
+}
+
 function updateGenrePickerVisibility() {
   // Inline style, not [hidden]: the wrapper's own display would override it.
   genrePicker.style.display = currentType === "genres" ? "flex" : "none";
+  updateGenreShuffleVisibility();
 }
 
 function updatePlayAllVisibility() {
@@ -394,8 +401,27 @@ typeButtons.forEach(btn => {
   });
 });
 
+genreShuffleBtn.addEventListener("click", async () => {
+  if (!currentGenre || genreShuffleBtn.disabled) return;
+  genreShuffleBtn.disabled = true;
+  try {
+    // Tracks come from the same albums the grid shows for this genre, so
+    // what you see is what plays. A fresh random mix on every press.
+    const res = await fetch(`/browse/api/genre-shuffle?tag=${encodeURIComponent(currentGenre)}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    if (data.results && data.results.length) MLPlayer.playQueue(data.results, 0);
+    else alert("No tracks found for that genre.");
+  } catch (e) {
+    alert("Couldn't start that shuffle. Try again in a moment.");
+  } finally {
+    genreShuffleBtn.disabled = false;
+  }
+});
+
 genreSelect.addEventListener("change", () => {
   currentGenre = genreSelect.value;
+  updateGenreShuffleVisibility();
   updateUrl();
   resetAndLoad();
 });
