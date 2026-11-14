@@ -330,6 +330,15 @@
 }
 .track-drag-handle:active { cursor: grabbing; }
 .track-art { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--pl-surface); }
+/* Album detail page header: cover art beside title/artist/actions. */
+.album-header { display: flex; align-items: flex-end; gap: var(--pl-space-md, 20px); margin-bottom: var(--pl-space-md, 20px); }
+.album-header-art { width: 200px; height: 200px; flex-shrink: 0; border-radius: var(--pl-radius-md); object-fit: cover; background: var(--pl-surface); box-shadow: 0 2px 8px rgba(23,59,58,0.25); }
+.album-header-info { flex: 1; min-width: 0; }
+.album-header-actions { display: flex; align-items: center; gap: var(--pl-space-sm); margin-top: var(--pl-space-sm); }
+@media (max-width: 600px) {
+  .album-header { flex-direction: column; align-items: flex-start; }
+  .album-header-art { width: min(240px, 70vw); height: auto; aspect-ratio: 1 / 1; }
+}
 .track-meta { flex: 1; min-width: 0; }
 .track-title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .track-artist { font-size: 13px; color: var(--pl-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
