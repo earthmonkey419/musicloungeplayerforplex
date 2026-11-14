@@ -4,21 +4,23 @@
 {% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
 {% block content %}
 <a href="javascript:history.back()" class="link-manage">← Back</a>
-<div class="pl-section-header">
-  <div>
+<div class="album-header">
+  <img class="album-header-art" src="/art/{{ rating_key }}?w=400" alt="Cover art for {{ album_title }}" decoding="async" onerror="this.style.visibility='hidden'">
+  <div class="album-header-info">
     <h1 style="font-size:28px; line-height:36px; margin:0;">{{ album_title }}</h1>
     <p class="pl-small" style="margin-top:4px;">{{ artist_title }}</p>
+    {% if tracks %}
+    <div class="album-header-actions">
+      <button id="play-album-btn" class="pl-btn pl-btn-primary">▶ Play Album</button>
+      <button id="album-room-share-trigger" class="room-share-trigger" title="Room or Share this album">⋯</button>
+    </div>
+    {% endif %}
   </div>
-  {% if tracks %}
-  <button id="play-album-btn" class="pl-btn pl-btn-primary">▶ Play Album</button>
-  <button id="album-room-share-trigger" class="room-share-trigger" title="Room or Share this album">⋯</button>
-  {% endif %}
 </div>
 
 <ul id="track-list" class="track-list">
   {% for t in tracks %}
   <li class="track-row" data-ref="{{ t['rating_key'] }}" data-title="{{ t['title'] }}" data-artist="{{ t['artist'] }}">
-    <img class="track-art" src="/art/{{ t['rating_key'] }}?w=128" alt="" loading="lazy" decoding="async">
     <div class="track-meta">
       <div class="track-title">{{ t['title'] }}</div>
       <div class="track-artist">{{ t['artist'] }}</div>
