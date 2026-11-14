@@ -334,6 +334,8 @@
 .album-header { display: flex; align-items: flex-end; gap: var(--pl-space-md, 20px); margin-bottom: var(--pl-space-md, 20px); }
 .album-header-art { width: 200px; height: 200px; flex-shrink: 0; border-radius: var(--pl-radius-md); object-fit: cover; background: var(--pl-surface); box-shadow: 0 2px 8px rgba(23,59,58,0.25); }
 .album-header-info { flex: 1; min-width: 0; }
+.artist-link { color: inherit; text-decoration: none; }
+.artist-link:hover { text-decoration: underline; }
 .album-header-meta { margin: 2px 0 0; opacity: .85; }
 .album-header-about { margin-top: var(--pl-space-sm); }
 .album-header-about summary { cursor: pointer; }

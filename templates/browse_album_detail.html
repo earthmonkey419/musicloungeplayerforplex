@@ -8,7 +8,7 @@
   <img class="album-header-art" src="/art/{{ rating_key }}?w=400" alt="Cover art for {{ album_title }}" decoding="async" onerror="this.style.visibility='hidden'">
   <div class="album-header-info">
     <h1 style="font-size:28px; line-height:36px; margin:0;">{{ album_title }}</h1>
-    <p class="pl-small" style="margin-top:4px;">{{ artist_title }}</p>
+    <p class="pl-small" style="margin-top:4px;">{% if album_info and album_info.artist_key %}<a class="artist-link" href="{{ url_for('browse.artist_detail', rating_key=album_info.artist_key) }}">{{ artist_title }}</a>{% else %}{{ artist_title }}{% endif %}</p>
     {% if album_info %}
     {% set mins = (album_info.runtime_sec // 60) %}
     {% set bits = [] %}

@@ -313,6 +313,7 @@ def _album_details(album_key):
         "rating_key": album.ratingKey,
         "title": album.title,
         "artist": album.parentTitle or "",
+        "artist_key": getattr(album, "parentRatingKey", None),
         "year": getattr(album, "year", None),
         "genres": [g.tag for g in (getattr(album, "genres", None) or [])][:3],
         "label": (getattr(album, "studio", None) or "").strip(),
