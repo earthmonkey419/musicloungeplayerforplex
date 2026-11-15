@@ -6,12 +6,15 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-- Help page: the Search section now describes the Tags field and Explore, and Browse covers Genres, Shuffle genre (plays only from the albums shown) versus Explore (every track with the tag), and the album page details
+## [2.7.0] - 2026-11-14
 
 ### Added
 - Browse has a new **Genres** pill. Pick a genre from the dropdown and the grid shows the albums that match it, ranked by how much of each album carries the genre (**Best match**), or sorted by title, artist, year or date added. With MusicMind connected, genres are its tags (the same list as the search page's Tags field, so a few mood-type tags such as "upbeat" appear alongside real genres), and an album counts when at least a quarter of its tracks carry the tag. Without MusicMind, the list is Plex's own album genres and there is no Best match sort. A **Shuffle genre** button next to the dropdown plays a fresh 50-track shuffle drawn from the albums shown for that genre (a random dozen of them if there are more). No migration needed
 - Share pages show album information. A link to a single album (or to two or more tracks that all come from one album) gets an album header with the cover, title, artist, year, track count, runtime, genres and label when Plex has them, plus a collapsible **About this album** blurb when Plex has a summary; a partial selection reads "5 of 12 tracks". The artist is shown once in the header instead of on every row, except where a track's artist differs (compilations). Playlists and mixed shares keep the playlist layout, with the album and year shown under each track. Fields Plex doesn't have are simply left out
+- The album page shows album details (year, track count, runtime, genres, label and summary) beside the cover, and the artist's name links to the artist page
+
+### Changed
+- Help page: the Search section now describes the Tags field and Explore, and Browse covers Genres, Shuffle genre (plays only from the albums shown) versus Explore (every track with the tag), and the album page details
 
 ## [2.6.0] - 2026-11-10
 
