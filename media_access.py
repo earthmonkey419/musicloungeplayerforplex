@@ -11,9 +11,10 @@ proxy. Access is now limited to:
     share they have opened. Opening /linked/<token> grants that share to
     the browser session; the grant is re-checked against the shares table
     on every request, so expiry and "End this link" take effect at once.
-  * the shared item's own cover (/art/<content_ref> of a live share) is
-    public, because share emails and link previews fetch it with no
-    session.
+  * the shared item's own cover (/art/<content_ref> of a live share, or of
+    one that expired within the last 30 days and was not ended) is public,
+    because share emails and link previews fetch it with no session, and a
+    preview card should not lose its picture when the link expires.
 
 One deliberate softening: when a share expires mid-listen, a track the
 browser had already started streaming may finish (and be seeked) for
@@ -128,7 +129,7 @@ def can_view_art(rating_key):
         return True
     if _granted_share_allows(rating_key):
         return True
-    return db.has_live_share_for_ref(rating_key)
+    return db.has_previewable_share_for_ref(rating_key)
 
 
 def can_stream(rating_key):

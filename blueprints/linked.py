@@ -67,11 +67,15 @@ def view_share(share_token):
     # Unknown, revoked and long-expired links all get the same bare 404 so
     # they can't be told apart. A link that expired recently on its own
     # gets a friendlier 410 that says so and lets the recipient ask for a
-    # new one (see _expired_page).
+    # new one (see _expired_page), and keeps its link-preview tags.
     if not db.is_share_live(share_token):
         page = _expired_page(share_token)
         if page is not None:
-            return page, 410
+            # People get 410 (gone). Link-preview crawlers get 200: Facebook
+            # and others ignore the og: tags on a non-2xx page and draw a
+            # blank grey card, so the preview must come back as a success.
+            bot = db.is_bot_user_agent(request.headers.get("User-Agent", ""))
+            return page, (200 if bot else 410)
         return render_template("link_expired.html", share=None, shared_by="", can_ask=False,
                                already_asked=False, token=share_token), 404
 

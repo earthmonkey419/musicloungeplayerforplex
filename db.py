@@ -342,14 +342,19 @@ def is_share_live(token):
     return True
 
 
-def has_live_share_for_ref(content_ref):
-    """True if some un-revoked, un-expired share is for this exact item.
-    Lets that item's cover art be fetched without a session (share emails
-    and link previews load it anonymously)."""
+def has_previewable_share_for_ref(content_ref):
+    """True if some un-revoked share is for this exact item and is either
+    live or expired within the expired-page window (_EXPIRED_PAGE_DAYS).
+    Lets that item's cover art be fetched without a session: share emails
+    and link previews (Facebook, iMessage, Slack...) load it anonymously,
+    and a link card should keep its picture after the link expires, the
+    same way the friendly expired page keeps naming the share. Ended
+    (revoked) links and long-expired ones get nothing."""
+    cutoff = (datetime.utcnow() - timedelta(days=_EXPIRED_PAGE_DAYS)).isoformat()
     conn = get_db()
     row = conn.execute(
         "SELECT 1 FROM shares WHERE content_ref = ? AND revoked = 0 AND expires_at > ? LIMIT 1",
-        (str(content_ref), _now()),
+        (str(content_ref), cutoff),
     ).fetchone()
     conn.close()
     return row is not None
