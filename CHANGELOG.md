@@ -6,6 +6,8 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- You get an email when a recipient taps **Ask for a new link** on an expired share page. It goes to your admin recovery address, names the link, says when it expired and points to Stats where you can Renew it. One email per expired link (repeat taps and links that were already flagged send nothing; renewing clears the flag, so a later expiry can email again). Only sent when SMTP and `ADMIN_RECOVERY_EMAIL` are set up; otherwise nothing changes and the bell badge in Stats still shows the request. A mail failure is logged and never shown to the visitor. No migration needed
 ## [2.7.1] - 2026-11-20
 
 ### Fixed
