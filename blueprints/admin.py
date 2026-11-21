@@ -438,7 +438,7 @@ def room_send_content():
     content_type = body.get("content_type")
     content_ref = body.get("content_ref")
     content_title = body.get("content_title", "")
-    if content_type not in ("track", "album", "playlist"):
+    if content_type not in ("track", "album", "playlist", "artist"):
         return jsonify({"error": "Unsupported content type."}), 400
     try:
         _, _, tracks = plex_client.get_content_tracks(content_type, content_ref)

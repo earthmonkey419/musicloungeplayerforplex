@@ -4,7 +4,26 @@
 {% block topbar %}{% include "partials/_player_nav.html" %}{% endblock %}
 {% block content %}
 <a href="javascript:history.back()" class="link-manage">← Back</a>
-<h1 style="font-size:32px; margin:var(--pl-space-sm) 0 var(--pl-space-lg);">{{ artist_title }}</h1>
+<h1 style="font-size:32px; margin:var(--pl-space-sm) 0 var(--pl-space-md);">{{ artist_title }}</h1>
+
+{% if albums %}
+<style>
+.artist-actions { display:flex; flex-wrap:wrap; align-items:center; gap:var(--pl-space-sm) var(--pl-space-md); margin:0 0 var(--pl-space-lg); }
+.artist-actions [hidden] { display:none; }
+</style>
+<div class="artist-actions">
+  <button id="artist-play-all-btn" class="pl-btn pl-btn-primary">▶ Play All</button>
+  <button id="artist-play-next-btn" class="pl-link-btn">⏭ Play Next</button>
+  <button id="artist-queue-btn" class="pl-link-btn">⏬ Add to Queue</button>
+  <button id="artist-add-playlist-btn" class="pl-link-btn">➕ Add to Playlist</button>
+  <button id="artist-radio-btn" class="pl-link-btn" hidden>📻 Artist Radio</button>
+  <!-- room-share-menu.js closes its popover on any click outside it that
+       isn't inside a .room-share-trigger. The display:contents wrapper
+       carries that class without adding a box (or the round-button
+       styling the class normally brings). -->
+  <span class="room-share-trigger" style="display:contents;"><button id="artist-room-share-btn" class="pl-link-btn" title="Start a Room or Share a Link">📡 Room / Share</button></span>
+</div>
+{% endif %}
 
 <div class="browse-grid">
   {% for album in albums %}
@@ -17,4 +36,170 @@
   <p class="pl-empty-note">No albums found for this artist.</p>
   {% endfor %}
 </div>
+
+{% if albums %}
+<div id="add-to-playlist-modal" class="pl-modal-overlay" hidden>
+  <div class="pl-modal">
+    <div class="pl-modal-header">
+      <h3>Add to playlist</h3>
+      <button id="atp-close" class="pl-link-btn" title="Close">✕</button>
+    </div>
+    <p id="atp-track-label" class="pl-small" style="margin: 0 0 var(--pl-space-sm);"></p>
+    <ul id="atp-playlist-list" class="pl-modal-playlist-list"></ul>
+    <div class="pl-modal-new-row">
+      <input id="atp-new-name" type="text" placeholder="Or create a new playlist…">
+      <button id="atp-new-btn" class="pl-btn pl-btn-mint">Create &amp; Add</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+const nativePlaylists = {{ playlists_for_modal | tojson }};
+const ARTIST_KEY = {{ rating_key | tojson }};
+const ARTIST_TITLE = {{ artist_title | tojson }};
+const ALBUM_KEYS = {{ albums | map(attribute='rating_key') | list | tojson }};
+const $ = (id) => document.getElementById(id);
+
+// The server's content-tracks resolver caps one call at 100 tracks, so a
+// whole discography is gathered one album at a time (same fan-out as
+// "Play All Albums" on search), in the order the page shows the albums.
+async function fetchArtistTracks() {
+  const perAlbum = await Promise.all(ALBUM_KEYS.map((k) =>
+    fetch(`/api/player/content-tracks?type=album&ref=${encodeURIComponent(k)}`)
+      .then((r) => (r.ok ? r.json() : { tracks: [] }))
+      .then((d) => d.tracks || [])
+      .catch(() => [])
+  ));
+  return [].concat(...perAlbum);
+}
+
+function flash(btn, text) {
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = btn.dataset.label; btn.disabled = false; }, 1500);
+}
+
+function onTracks(id, action, doneText) {
+  const btn = $(id);
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    if (btn.disabled) return;
+    btn.dataset.label = btn.dataset.label || btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+    let tracks = [];
+    try { tracks = await fetchArtistTracks(); } catch (e) {}
+    if (!tracks.length) { flash(btn, "No tracks found"); return; }
+    action(tracks);
+    if (doneText) flash(btn, doneText);
+    else { btn.textContent = btn.dataset.label; btn.disabled = false; }
+  });
+}
+
+onTracks("artist-play-all-btn", (tracks) => MLPlayer.playQueue(tracks, 0));
+onTracks("artist-play-next-btn", (tracks) => MLPlayer.playNext(tracks), "✓ Playing next");
+onTracks("artist-queue-btn", (tracks) => tracks.forEach((t) => MLPlayer.enqueue(t)), "✓ Added");
+onTracks("artist-add-playlist-btn", (tracks) => openAddToPlaylistBulk(tracks));
+
+// Artist Radio -- shown only when the server says radio is available.
+const radioBtn = $("artist-radio-btn");
+if (radioBtn && window.MLRadio) {
+  window.MLRadio.capabilities().then((c) => { if (c && c.track_radio) radioBtn.hidden = false; });
+  radioBtn.addEventListener("click", async () => {
+    if (radioBtn.disabled) return;
+    const label = radioBtn.textContent;
+    radioBtn.disabled = true;
+    radioBtn.textContent = "Starting…";
+    const ok = await window.MLRadio.start({ type: "artist", ref: ARTIST_KEY });
+    radioBtn.textContent = ok ? "✓ Radio started" : "Couldn't start radio";
+    setTimeout(() => { radioBtn.textContent = label; radioBtn.disabled = false; }, 1800);
+  });
+}
+
+// Start a Room / Share a Link -- the shared popover, trimmed to those two.
+const roomShareBtn = $("artist-room-share-btn");
+if (roomShareBtn) {
+  roomShareBtn.addEventListener("click", (e) => {
+    window.openRoomShareMenu(e.currentTarget, {
+      type: "artist",
+      ref: ARTIST_KEY,
+      title: ARTIST_TITLE,
+      artist: ARTIST_TITLE,
+      compact: true,
+    });
+  });
+}
+
+// --- Add-to-playlist modal (bulk only; same pattern as the album page) ----
+const atpModal = $("add-to-playlist-modal");
+const atpTrackLabel = $("atp-track-label");
+const atpPlaylistList = $("atp-playlist-list");
+const atpNewName = $("atp-new-name");
+let atpTracks = null;
+
+function openAddToPlaylistBulk(tracks) {
+  atpTracks = tracks;
+  atpTrackLabel.textContent = `${tracks.length} track${tracks.length === 1 ? "" : "s"} by ${ARTIST_TITLE}`;
+  atpNewName.value = "";
+  renderPlaylistPickerList();
+  atpModal.hidden = false;
+}
+
+function closeAddToPlaylist() { atpModal.hidden = true; atpTracks = null; }
+
+function renderPlaylistPickerList() {
+  atpPlaylistList.innerHTML = "";
+  if (!nativePlaylists.length) {
+    atpPlaylistList.innerHTML = '<li class="empty">No playlists yet -- create one below.</li>';
+    return;
+  }
+  nativePlaylists.forEach((p) => {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.className = "pl-modal-playlist-btn";
+    btn.textContent = p.name;
+    btn.addEventListener("click", () => addToPlaylist(p.id));
+    li.appendChild(btn);
+    atpPlaylistList.appendChild(li);
+  });
+}
+
+function addToPlaylist(playlistId) {
+  if (!atpTracks) return;
+  fetch(`/playlists/api/${playlistId}/add-tracks`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ tracks: atpTracks.map((t) => ({
+      rating_key: t.rating_key, title: t.title, artist: t.artist, duration_sec: t.duration_sec || 0,
+    })) }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data.ok) closeAddToPlaylist();
+      else alert(data.error || "Couldn't add those tracks.");
+    })
+    .catch(() => alert("Something went wrong adding those tracks."));
+}
+
+$("atp-close").addEventListener("click", closeAddToPlaylist);
+atpModal.addEventListener("click", (e) => { if (e.target === atpModal) closeAddToPlaylist(); });
+
+$("atp-new-btn").addEventListener("click", () => {
+  const name = atpNewName.value.trim();
+  if (!name) return;
+  fetch("{{ url_for('playlists.api_create') }}", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({name}),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.ok) { alert(data.error || "Couldn't create playlist."); return; }
+      nativePlaylists.push({id: data.playlist_id, name: name, source: "native"});
+      addToPlaylist(data.playlist_id);
+    });
+});
+})();
+</script>
+{% endif %}
 {% endblock %}

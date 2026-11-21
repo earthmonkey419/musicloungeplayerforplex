@@ -487,7 +487,7 @@ def _radio_start_seeded(kind, ref):
     else:
         plex_tracks = item.tracks()
         if not plex_tracks:
-            return _radio_error("That album has no tracks.")
+            return _radio_error(f"That {kind} has no tracks.")
         all_keys = [int(t.ratingKey) for t in plex_tracks]
         pick = _radio_random.choice(all_keys)
         seeds = _radio_random.sample(all_keys, min(len(all_keys), RADIO_MAX_SEEDS))
@@ -606,7 +606,7 @@ def api_radio_start():
             return _radio_start_library()
         if kind == "random_album":
             return _radio_start_random_album()
-        if kind in ("track", "album") and ref:
+        if kind in ("track", "album", "artist") and ref:
             return _radio_start_seeded(kind, ref)
         return _radio_error("Unknown radio request.")
     except Exception:

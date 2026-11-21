@@ -6,6 +6,12 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Artist pages have an action bar above the albums: **Play All** (every track by the artist, album by album in the order shown), **Play Next**, **Add to Queue**, **Add to Playlist**, **Artist Radio** (a station seeded from the artist's tracks; hidden when radio isn't available) and **Room / Share** (start a room or create a share link for the artist; either covers the artist's first ten albums, up to 100 tracks). No migration needed
+
+### Changed
+- Help page: Browse describes the artist page's action bar, and Radio mentions Artist Radio
+
 ## [2.7.0] - 2026-11-14
 
 ### Added

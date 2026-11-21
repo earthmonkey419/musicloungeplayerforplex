@@ -148,11 +148,13 @@ def artist_detail(rating_key):
     except Exception:
         current_app.logger.exception("Failed to load artist rating_key=%r", rating_key)
         return "Couldn't load that artist.", 502
+    native_playlists = [dict(p) for p in db.list_playlists() if p["source"] == "native"]
     return render_template(
         "browse_artist_detail.html",
         artist_title=artist_title,
         albums=albums,
         rating_key=rating_key,
+        playlists_for_modal=native_playlists,
         lastfm_active=_lastfm_active(),
         player_family=True,
     )
