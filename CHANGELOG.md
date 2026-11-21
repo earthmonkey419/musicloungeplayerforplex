@@ -7,6 +7,10 @@ this project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Artist pages have an action bar above the albums: **Play All** (every track by the artist, album by album in the order shown), **Play Next**, **Add to Queue**, **Add to Playlist**, **Artist Radio** (a station seeded from the artist's tracks; hidden when radio isn't available) and **Room / Share** (start a room or create a share link for the artist; either covers the artist's first ten albums, up to 100 tracks). No migration needed
+
+### Changed
+- Help page: Browse describes the artist page's action bar, and Radio mentions Artist Radio
 - You get an email when a recipient taps **Ask for a new link** on an expired share page. It goes to your admin recovery address, names the link, says when it expired and points to Stats where you can Renew it. One email per expired link (repeat taps and links that were already flagged send nothing; renewing clears the flag, so a later expiry can email again). Only sent when SMTP and `ADMIN_RECOVERY_EMAIL` are set up; otherwise nothing changes and the bell badge in Stats still shows the request. A mail failure is logged and never shown to the visitor. No migration needed
 ## [2.7.1] - 2026-11-20
 
