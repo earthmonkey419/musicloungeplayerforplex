@@ -2,6 +2,19 @@
 {% block title %}Link expired — MusicLounge Player{% endblock %}
 {% block body_class %}ml-player-theme{% endblock %}
 {% block topbar %}{% include "partials/_player_nav_minimal.html" %}{% endblock %}
+{% block og_tags %}
+{% if share %}
+{# Same card as the live link, so a post made before the link expired (or
+   scraped after) still shows the cover, title and artist. #}
+<meta property="og:title" content="{{ share['content_title'] }}{% if share['content_artist'] %} -- {{ share['content_artist'] }}{% endif %}">
+<meta property="og:description" content="Someone shared this with you on MusicLounge. Tap to listen -- no account needed.">
+<meta property="og:image" content="{{ url_for('room.art', rating_key=share['content_ref'], _external=True) }}">
+<meta property="og:type" content="music.song">
+<meta name="twitter:card" content="summary_large_image">
+{% else %}
+{{ super() }}
+{% endif %}
+{% endblock %}
 {% block content %}
 <div class="pl-card pl-card-surface" style="max-width:480px; margin:80px auto; text-align:center;">
   <div style="font-size:40px;">🎟️</div>

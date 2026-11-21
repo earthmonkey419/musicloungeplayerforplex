@@ -1,12 +1,14 @@
 import secrets
+import threading
 import time
 from datetime import datetime
 
-from flask import Blueprint, render_template, current_app, request, session, jsonify
+from flask import Blueprint, render_template, current_app, request, session, jsonify, url_for
 
 import db
 import plex_client
 import media_access
+import email_utils
 
 bp = Blueprint("linked", __name__)
 
@@ -67,11 +69,15 @@ def view_share(share_token):
     # Unknown, revoked and long-expired links all get the same bare 404 so
     # they can't be told apart. A link that expired recently on its own
     # gets a friendlier 410 that says so and lets the recipient ask for a
-    # new one (see _expired_page).
+    # new one (see _expired_page), and keeps its link-preview tags.
     if not db.is_share_live(share_token):
         page = _expired_page(share_token)
         if page is not None:
-            return page, 410
+            # People get 410 (gone). Link-preview crawlers get 200: Facebook
+            # and others ignore the og: tags on a non-2xx page and draw a
+            # blank grey card, so the preview must come back as a success.
+            bot = db.is_bot_user_agent(request.headers.get("User-Agent", ""))
+            return page, (200 if bot else 410)
         return render_template("link_expired.html", share=None, shared_by="", can_ask=False,
                                already_asked=False, token=share_token), 404
 
@@ -124,10 +130,39 @@ def request_renewal(share_token):
     """'Ask for a new link' on the expired page. Only flags the share for the
     host (no message, no contact details are taken from the visitor). Answers
     the same for 'flagged' and 'already flagged'; refuses anything that
-    isn't a recently expired, un-revoked share with a plain 404."""
-    if db.request_share_renewal(share_token):
-        return jsonify({"ok": True})
-    return jsonify({"ok": False}), 404
+    isn't a recently expired, un-revoked share with a plain 404. The FIRST
+    request for a link also emails the host (when email is set up); repeat
+    taps and the already-flagged case never send another."""
+    result = db.request_share_renewal(share_token)
+    if not result:
+        return jsonify({"ok": False}), 404
+    if result == "new":
+        _notify_host_of_renewal_request(share_token)
+    return jsonify({"ok": True})
+
+
+def _notify_host_of_renewal_request(share_token):
+    """Best-effort email to the admin. Skipped silently when SMTP / the
+    recovery address aren't configured. Sent from a background thread so the
+    visitor's 'Request sent' never waits on (or fails because of) SMTP."""
+    if not email_utils.renewal_email_ready():
+        return
+    row = db.get_share(share_token)
+    if not row:
+        return
+    # request.host_url, not url_for(_external=True): behind the Cloudflare
+    # Tunnel _external can build the wrong scheme (see admin.py).
+    stats_url = request.host_url.rstrip("/") + url_for("admin.stats")
+    args = (row["content_title"], row["content_artist"], row["expires_at"], stats_url)
+    app = current_app._get_current_object()
+
+    def _send():
+        try:
+            email_utils.send_renewal_request_email(*args)
+        except Exception:
+            app.logger.exception("Failed to send renewal-request email")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 @bp.route("/<share_token>/event", methods=["POST"])

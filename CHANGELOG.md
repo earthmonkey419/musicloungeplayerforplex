@@ -11,6 +11,11 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Help page: Browse describes the artist page's action bar, and Radio mentions Artist Radio
+- You get an email when a recipient taps **Ask for a new link** on an expired share page. It goes to your admin recovery address, names the link, says when it expired and points to Stats where you can Renew it. One email per expired link (repeat taps and links that were already flagged send nothing; renewing clears the flag, so a later expiry can email again). Only sent when SMTP and `ADMIN_RECOVERY_EMAIL` are set up; otherwise nothing changes and the bell badge in Stats still shows the request. A mail failure is logged and never shown to the visitor. No migration needed
+## [2.7.1] - 2026-11-20
+
+### Fixed
+- Link previews survive expiry. When a share link expired, Facebook (and other crawlers) showed a blank grey card, because the expired page answered with an error status and the cover image was only public while the link was live. The expired page now carries the same title, artist and cover tags as the live page and answers link-preview crawlers with a normal 200 (people still get the 410 page), and the shared item's cover stays fetchable for 30 days after expiry. Ended links still get nothing. No migration needed. Posts already showing a grey card need one **Scrape Again** in Facebook's Sharing Debugger
 
 ## [2.7.0] - 2026-11-14
 
