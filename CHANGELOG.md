@@ -6,6 +6,11 @@ this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-11-20
+
+### Fixed
+- Link previews survive expiry. When a share link expired, Facebook (and other crawlers) showed a blank grey card, because the expired page answered with an error status and the cover image was only public while the link was live. The expired page now carries the same title, artist and cover tags as the live page and answers link-preview crawlers with a normal 200 (people still get the 410 page), and the shared item's cover stays fetchable for 30 days after expiry. Ended links still get nothing. No migration needed. Posts already showing a grey card need one **Scrape Again** in Facebook's Sharing Debugger
+
 ## [2.7.0] - 2026-11-14
 
 ### Added
