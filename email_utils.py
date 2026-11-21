@@ -4,6 +4,7 @@ same BYOK philosophy as the Plex token -- never a third-party email
 provider dependency. Plain smtplib, per the scope doc.
 """
 import smtplib
+from html import escape as html_escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -89,6 +90,69 @@ def send_password_reset_email(reset_url):
          Reset password</a></p>
       <p style="color:#888; font-size:12px;">This link expires in 30 minutes and can only be
       used once. If you didn't request this, you can ignore this email.</p>
+    </div>
+    """
+
+    msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=10) as server:
+        if config.SMTP_USE_TLS:
+            server.starttls()
+        if config.SMTP_USERNAME:
+            server.login(config.SMTP_USERNAME, config.SMTP_PASSWORD)
+        server.send_message(msg)
+
+
+def renewal_email_ready():
+    """True only when this install can actually send mail AND knows where
+    to send it: a real SMTP host and From address, plus the admin recovery
+    address. Anything still at the config.example placeholder counts as
+    not set up, so an unconfigured install just skips the email."""
+    import config
+
+    def real(v):
+        return bool(v) and v != "REPLACE_ME"
+
+    return (real(getattr(config, "SMTP_HOST", ""))
+            and real(getattr(config, "SMTP_FROM_ADDRESS", ""))
+            and bool(getattr(config, "ADMIN_RECOVERY_EMAIL", "")))
+
+
+def send_renewal_request_email(content_title, content_artist, expired_at, stats_url):
+    """Tells the host that a recipient tapped 'Ask for a new link' on an
+    expired share. Goes to the single configured admin address (same fixed
+    recipient as the password reset email). Carries nothing from the
+    visitor -- the page never collects a name, message or contact detail."""
+    import config
+
+    what = content_title or "a shared link"
+    if content_artist:
+        what = f"{what} \u2014 {content_artist}"
+    when = (expired_at or "")[:16].replace("T", " ")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Someone asked for more time on: {content_title or 'a shared link'}"
+    msg["From"] = f"{config.SMTP_FROM_DISPLAY_NAME} <{config.SMTP_FROM_ADDRESS}>"
+    msg["To"] = config.ADMIN_RECOVERY_EMAIL
+
+    text_body = (
+        f"A recipient asked for a new link to: {what}\n"
+        f"The link expired {when} UTC.\n\n"
+        f"To give them more time, open Stats and use Renew on that link "
+        f"(its URL stays the same):\n{stats_url}\n\n"
+        f"You'll only get one email per expired link. Nothing was collected "
+        f"from the visitor."
+    )
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 480px;">
+      <p>A recipient asked for a new link to <strong>{html_escape(what)}</strong>.</p>
+      <p style="color:#888; font-size:13px;">The link expired {html_escape(when)} UTC.</p>
+      <p><a href="{html_escape(stats_url)}" style="display:inline-block; background:#FF9137; color:#29231F;
+         padding:12px 20px; border-radius:8px; text-decoration:none; font-weight:bold;">
+         Open Stats to renew</a></p>
+      <p style="color:#888; font-size:12px;">Use <em>Renew</em> on that link; its URL stays the same.
+      You'll only get one email per expired link, and nothing was collected from the visitor.</p>
     </div>
     """
 

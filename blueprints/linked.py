@@ -1,12 +1,14 @@
 import secrets
+import threading
 import time
 from datetime import datetime
 
-from flask import Blueprint, render_template, current_app, request, session, jsonify
+from flask import Blueprint, render_template, current_app, request, session, jsonify, url_for
 
 import db
 import plex_client
 import media_access
+import email_utils
 
 bp = Blueprint("linked", __name__)
 
@@ -128,10 +130,39 @@ def request_renewal(share_token):
     """'Ask for a new link' on the expired page. Only flags the share for the
     host (no message, no contact details are taken from the visitor). Answers
     the same for 'flagged' and 'already flagged'; refuses anything that
-    isn't a recently expired, un-revoked share with a plain 404."""
-    if db.request_share_renewal(share_token):
-        return jsonify({"ok": True})
-    return jsonify({"ok": False}), 404
+    isn't a recently expired, un-revoked share with a plain 404. The FIRST
+    request for a link also emails the host (when email is set up); repeat
+    taps and the already-flagged case never send another."""
+    result = db.request_share_renewal(share_token)
+    if not result:
+        return jsonify({"ok": False}), 404
+    if result == "new":
+        _notify_host_of_renewal_request(share_token)
+    return jsonify({"ok": True})
+
+
+def _notify_host_of_renewal_request(share_token):
+    """Best-effort email to the admin. Skipped silently when SMTP / the
+    recovery address aren't configured. Sent from a background thread so the
+    visitor's 'Request sent' never waits on (or fails because of) SMTP."""
+    if not email_utils.renewal_email_ready():
+        return
+    row = db.get_share(share_token)
+    if not row:
+        return
+    # request.host_url, not url_for(_external=True): behind the Cloudflare
+    # Tunnel _external can build the wrong scheme (see admin.py).
+    stats_url = request.host_url.rstrip("/") + url_for("admin.stats")
+    args = (row["content_title"], row["content_artist"], row["expires_at"], stats_url)
+    app = current_app._get_current_object()
+
+    def _send():
+        try:
+            email_utils.send_renewal_request_email(*args)
+        except Exception:
+            app.logger.exception("Failed to send renewal-request email")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 @bp.route("/<share_token>/event", methods=["POST"])

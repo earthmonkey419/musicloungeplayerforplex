@@ -439,24 +439,26 @@ def request_share_renewal(token):
     sees 'asked for more time'. Only works on a share that expired on its
     own (never a revoked one) within the last _EXPIRED_PAGE_DAYS days, and
     is idempotent -- a second tap changes nothing. Carries no message from
-    the visitor. Returns True if the share is flagged (now or already)."""
+    the visitor. Returns "new" when this call flagged the share, "already"
+    when it was flagged before, and None when the request is refused."""
     row = get_share(token)
     if not row or row["revoked"] or row["expires_at"] > _now():
-        return False
+        return None
     if not expired_page_visible(row):
-        return False
+        return None
     if "renewal_requested_at" not in row.keys():
-        return False                      # migrate_share_renew.py not run yet
+        return None                       # migrate_share_renew.py not run yet
     if row["renewal_requested_at"]:
-        return True
+        return "already"
     conn = get_db()
-    conn.execute(
+    cur = conn.execute(
         "UPDATE shares SET renewal_requested_at = ? WHERE share_token = ? AND renewal_requested_at IS NULL",
         (_now(), token),
     )
+    flagged = cur.rowcount == 1           # False if a concurrent tap won the race
     conn.commit()
     conn.close()
-    return True
+    return "new" if flagged else "already"
 
 
 def expired_page_visible(row):
